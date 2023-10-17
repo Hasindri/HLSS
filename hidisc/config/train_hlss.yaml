@@ -1,10 +1,12 @@
 infra:
     log_dir: /data1/dri/hidisc/hidisc/exps # where all the experiments are
-    exp_name: Exp001 # create a subdirectory for each set of experiments
+    exp_name: Exp002 # create a subdirectory for each set of experiments
     comment: patient_disc_dev # can use this to customize for each experiment
-    seed: 2000
+    seed: 1000
 data:
     db_root: /data1/dri/hidisc/hidisc/datasets/opensrh
+    data_classes : { 'hgg' : 'high grade glioma', 'lgg' : 'low grade glioma', 'mening' : 'meningioma','metast' : 'metastatic tumor', 'normal' : 'normal brain tissue', 'pituita' : 'pituitary adenoma', 
+           'schwan' : 'schwannoma'}
     train_augmentation:
         - which: random_horiz_flip
           params: {}
@@ -72,9 +74,13 @@ data:
         num_transforms: 2
     balance_study_per_class: true
 model:
-    backbone: resnet50
+    backbone: RN50
     mlp_hidden: []
     num_embedding_out: 7
+    templates: ["a histopathology slide showing {c}",
+            "histopathology image of {c}",
+            "pathology tissue showing {c}",
+            "presence of {c} tissue on image"]
 training:
     objective:
         which: hidisc
@@ -88,7 +94,7 @@ training:
                 contrast_mode: all
     # batch_size: 10
     batch_size: 32
-    num_epochs: 1
+    num_epochs: 40000
     optimizer: adamw # [sgd, adam, adamw]
     learn_rate: 1.0e-3
     scheduler:

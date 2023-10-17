@@ -19,7 +19,7 @@ import torchmetrics
 from models import MLP, resnet_backbone, ContrastiveLearningNetwork
 from common import (setup_output_dirs, parse_args, get_exp_name,
                            config_loggers, get_optimizer_func,
-                           get_scheduler_func, get_dataloaders)
+                           get_scheduler_func, get_dataloaders,get_dataloaders_tcga)
 from losses.hidisc import HiDiscLoss
 
 import warnings
@@ -27,7 +27,7 @@ import warnings
 # Ignore all warnings
 warnings.filterwarnings("ignore")
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 
 
@@ -79,21 +79,15 @@ class HiDiscSystem(pl.LightningModule):
         return pred.reshape(*batch["image"].shape[:4], pred.shape[-1])
 
     def training_step(self, batch, _):
-        print(f'batch {batch["image"].shape}')
         im_reshaped = batch["image"].reshape(-1, *batch["image"].shape[-3:])
-        print(f'im_reshaped {im_reshaped.shape}')
         pred = self.model(im_reshaped)
         pred = pred.reshape(*batch["image"].shape[:4], pred.shape[-1])
-        print(f'pred {pred.shape}')
 
         pred_gather = self.all_gather(pred, sync_grads=True)
         pred_gather = pred_gather.reshape(-1, *pred_gather.shape[2:])
         label_gather = self.all_gather(batch["label"]).reshape(-1, 1)
-        print(f'pred_gather {pred_gather.shape}')
-        print(f'label_gather {label_gather.shape}')
 
         losses = self.criterion(pred_gather, label_gather)
-        print(f'losses {losses}')
 
         bs = batch["image"][0].shape[0] * torch.cuda.device_count()
         log_partial = partial(self.log,
@@ -129,7 +123,7 @@ class HiDiscSystem(pl.LightningModule):
         assert len(batch["image"].shape) == 4
         out = self.model.bb(batch["image"])
         return {
-            "path": batch["path"],
+            "path": batch["slide_path"],
             "label": batch["label"],
             "embeddings": out
         }
@@ -182,8 +176,8 @@ class HiDiscSystem(pl.LightningModule):
 
 def main():
     cf_fd = parse_args()
-    # print (f'args {cf_fd}')
     cf = yaml.load(cf_fd, Loader=yaml.FullLoader)
+    # print (f'args {cf}')
     exp_root, model_dir, cp_config = setup_output_dirs(cf, get_exp_name, "")
     # print(f'exp_root {exp_root}')
     # print(f'model_dir {model_dir}')
@@ -194,7 +188,7 @@ def main():
     cp_config(cf_fd.name)
     config_loggers(exp_root)
 
-    train_loader, valid_loader = get_dataloaders(cf)
+    train_loader, valid_loader = get_dataloaders_tcga(cf)
     system_func = HiDiscSystem
 
     logging.info(f"num devices: {torch.cuda.device_count()}")
@@ -260,14 +254,14 @@ def main():
     #     exp = HiDiscSystem(cf, num_it_per_ep)
 
 
-    trainer.fit(exp,
-                train_dataloaders=train_loader,
-                val_dataloaders=valid_loader, ckpt_path = "/data1/dri/hidisc/hidisc/exps/Exp001/1f1aea1b-Oct15-15-42-41-patient_disc_dev_/models/ckpt-epoch15599.ckpt")
-
-
     # trainer.fit(exp,
     #             train_dataloaders=train_loader,
-    #             val_dataloaders=valid_loader)
+    #             val_dataloaders=valid_loader, ckpt_path = "/l/users/hasindri.watawana/hidisc/datasets/patched_tcga/hidisc_strongaug/patient/10d81fe3-Oct03-01-30-18-patient_disc_dev_/models/ckpt-epoch1.ckpt")
+
+
+    trainer.fit(exp,
+                train_dataloaders=train_loader,
+                val_dataloaders=valid_loader)
 
 if __name__ == '__main__':
     main()

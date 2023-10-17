@@ -15,3 +15,6 @@ lightning_logs/
 *bak
 /hidisc/datasets/opensrh
 hidisc/openslide-3.4.1/
+hidisc/wandb
+*.gz
+hidisc/exps

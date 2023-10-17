@@ -1,8 +1,8 @@
 infra:
-    log_dir: /data1/dri/hidisc/hidisc/datasets/opensrh/hidisc_strongaug # where all the experiments are
-    exp_name: slide # use the same name as the training experiment
-    comment: slide_disc_dev # can use this to customize for each experiment
-    seed: 1000
+    log_dir: /data1/dri/hidisc/hidisc/exps # where all the experiments are
+    exp_name: Exp001 # use the same name as the training experiment
+    comment: patient_disc_dev # can use this to customize for each experiment
+    seed: 2000
 model:
     backbone: resnet50
     mlp_hidden: []
@@ -39,5 +39,5 @@ eval:
     # ckpt_path : f93d0124-Sep25-00-40-13-slide_disc_weak_/models/ckpt-epoch23999.ckpt
     
     #HiDisc-Slide + strong augs
-    ckpt_path : bf6a6b7f-Sep25-14-51-28-slide_disc_dev_/models/ckpt-epoch23999.ckpt
+    ckpt_path : 1f1aea1b-Oct15-15-42-41-patient_disc_dev_/models/ckpt-epoch15599.ckpt
     

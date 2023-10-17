@@ -16,19 +16,25 @@ import pytorch_lightning as pl
 # from pytorch_lightning.utilities.cloud_io import load as pl_load
 import torchmetrics
 
-from models import MLP, resnet_backbone, ContrastiveLearningNetwork
+from models import MLP, resnet_backbone, ContrastiveLearningNetwork, HLSSContrastiveLearningNetwork, CLIPTextClassifier,CLIPVisual
 from common import (setup_output_dirs, parse_args, get_exp_name,
                            config_loggers, get_optimizer_func,
                            get_scheduler_func, get_dataloaders)
 from losses.hidisc import HiDiscLoss
+
+from clip.clip import load
 
 import warnings
 
 # Ignore all warnings
 warnings.filterwarnings("ignore")
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 
+import wandb
+# wandb login --relogin
+# Initialize Wandb
+wandb.init(project='Exp002')
 
 
 class HiDiscSystem(pl.LightningModule):
@@ -38,16 +44,17 @@ class HiDiscSystem(pl.LightningModule):
         super().__init__()
         self.cf_ = cf
 
-        if cf["model"]["backbone"] == "resnet50":
-            bb = partial(resnet_backbone, arch=cf["model"]["backbone"])
+        if cf["model"]["backbone"] == "RN50":
+            bb = partial(CLIPVisual, arch=cf["model"]["backbone"])
+            # print(f'bb {bb}')
         else:
             raise NotImplementedError()
 
-        mlp = partial(MLP,
-                      n_in=bb().num_out,
-                      hidden_layers=cf["model"]["mlp_hidden"],
-                      n_out=cf["model"]["num_embedding_out"])
-        self.model = ContrastiveLearningNetwork(bb, mlp)
+        mlp = partial(CLIPTextClassifier,
+                      arch=cf["model"]["backbone"],
+                      labels = cf["data"]["data_classes"],
+                      templates=cf["model"]["templates"])
+        self.model = HLSSContrastiveLearningNetwork(bb, mlp)
 
         if "training" in cf:
             crit_params = cf["training"]["objective"]["params"]
@@ -79,21 +86,21 @@ class HiDiscSystem(pl.LightningModule):
         return pred.reshape(*batch["image"].shape[:4], pred.shape[-1])
 
     def training_step(self, batch, _):
-        print(f'batch {batch["image"].shape}')
+        # print(f'batch {batch["image"].shape}')
         im_reshaped = batch["image"].reshape(-1, *batch["image"].shape[-3:])
-        print(f'im_reshaped {im_reshaped.shape}')
+        # print(f'im_reshaped {im_reshaped.shape}')
         pred = self.model(im_reshaped)
         pred = pred.reshape(*batch["image"].shape[:4], pred.shape[-1])
-        print(f'pred {pred.shape}')
+        # print(f'pred {pred.shape}')
 
         pred_gather = self.all_gather(pred, sync_grads=True)
         pred_gather = pred_gather.reshape(-1, *pred_gather.shape[2:])
         label_gather = self.all_gather(batch["label"]).reshape(-1, 1)
-        print(f'pred_gather {pred_gather.shape}')
-        print(f'label_gather {label_gather.shape}')
+        # print(f'pred_gather {pred_gather.shape}')
+        # print(f'label_gather {label_gather.shape}')
 
         losses = self.criterion(pred_gather, label_gather)
-        print(f'losses {losses}')
+        # print(f'losses {losses}')
 
         bs = batch["image"][0].shape[0] * torch.cuda.device_count()
         log_partial = partial(self.log,
@@ -143,6 +150,7 @@ class HiDiscSystem(pl.LightningModule):
                      sync_dist=True,
                      rank_zero_only=True)
             logging.info(f"train/{k}_manualepoch {train_loss_k}")
+            wandb.log({f"train/{k}": train_loss_k})
             self.train_loss[k].reset()
 
     def on_validation_epoch_end(self):
@@ -154,6 +162,7 @@ class HiDiscSystem(pl.LightningModule):
                      sync_dist=True,
                      rank_zero_only=True)
             logging.info(f"val/{k}_manualepoch {val_loss_k}")
+            wandb.log({f"val/{k}": val_loss_k})
             self.val_loss[k].reset()
 
     def configure_optimizers(self):
@@ -241,33 +250,15 @@ def main():
         num_nodes=1)
     
     exp = HiDiscSystem(cf, num_it_per_ep)
-       
-    # Load pre-trained checkpoint if it exists
-    # ckpt_path = "/l/users/hasindri.watawana/hidisc/datasets/opensrh/hidisc_train/8d0f44c5-Jul31-14-57-44-patient_disc_dev_/models/ckpt-epoch6799.ckpt"
-    # if os.path.isfile(ckpt_path):
-    #     print("Loading pre-trained checkpoint...")
-    #     checkpoint = torch.load(ckpt_path)
-    #     # print(f'checkpoint {checkpoint["optimizer_states"]["optimizer"]}')
-        
-    #     exp = HiDiscSystem.load_from_checkpoint(ckpt_path, cf=cf, num_it_per_ep=num_it_per_ep)
 
-    # # Update optimizer and scheduler states from the checkpoint
-    #     if 'optimizer_states' in checkpoint:
-    #         trainer.optimizers[0].load_state_dict(checkpoint['optimizer_states'][0])
-    #     if 'lr_schedulers' in checkpoint:
-    #         trainer.lr_schedulers[0]['scheduler'].load_state_dict(checkpoint['lr_schedulers'][0]['scheduler'])
-    # else:
-    #     exp = HiDiscSystem(cf, num_it_per_ep)
+    # trainer.fit(exp,
+    #             train_dataloaders=train_loader,
+    #             val_dataloaders=valid_loader, ckpt_path = "/data1/dri/hidisc/hidisc/datasets/opensrh/hidisc_train/6edee2ae-Sep21-14-17-42-patch_disc_weak_/models/ckpt-epoch5599.ckpt")
 
 
     trainer.fit(exp,
                 train_dataloaders=train_loader,
-                val_dataloaders=valid_loader, ckpt_path = "/data1/dri/hidisc/hidisc/exps/Exp001/1f1aea1b-Oct15-15-42-41-patient_disc_dev_/models/ckpt-epoch15599.ckpt")
-
-
-    # trainer.fit(exp,
-    #             train_dataloaders=train_loader,
-    #             val_dataloaders=valid_loader)
+                val_dataloaders=valid_loader)
 
 if __name__ == '__main__':
     main()

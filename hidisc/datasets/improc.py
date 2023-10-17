@@ -10,7 +10,7 @@ from functools import partial
 import random
 import tifffile
 import numpy as np
-
+import h5py
 import torch
 from torch.nn import ModuleList
 from torchvision.transforms import (
@@ -103,11 +103,95 @@ def process_read_im(imp: str) -> torch.Tensor:
         return torch.from_numpy(tif.asarray().astype(np.float32)).contiguous()
 
 
+def read_h5_patches(imp: str) -> torch.Tensor:
+    """Read image patches from an HDF5 file and return a tensor.
+
+    Args:
+        imp (str): Path to the HDF5 file containing image patches.
+
+    Returns:
+        torch.Tensor: A tensor containing image patches of shape (n, 300, 300, 3).
+    """
+
+    with h5py.File(imp, "r") as h5_file:
+        if "imgs" in h5_file:
+            dataset = h5_file["imgs"]
+            tensor = torch.from_numpy(dataset[:].astype(np.float32)).contiguous()
+            
+            return tensor
+        else:
+            print(f'no imgs key')
+            raise KeyError("'imgs' key not found in the HDF5 file.")
+
+def read_one_patch(imp: str , idx : int) -> torch.Tensor:
+    """Read image patches from an HDF5 file and return a tensor representing one patch.
+
+    Args:
+        imp (str): Path to the HDF5 file containing image patches.
+        idx (int) : index of the patch number to be read (either 0 or 1)
+
+    Returns:
+        torch.Tensor: A tensor containing image patches of shape (n, 300, 300, 3).
+    """
+
+    with h5py.File(imp, "r") as h5_file:
+        if "imgs" in h5_file:
+            im_id = np.random.permutation(np.arange(h5_file["imgs"].shape[0]))
+            curr_idx = idx % len(im_id)
+            img = h5_file["imgs"][im_id[curr_idx]]
+            tensor = torch.from_numpy(img[:].astype(np.float32)).contiguous()
+            
+            return tensor, im_id[curr_idx]
+        else:
+            print(f'no imgs key')
+            raise KeyError("'imgs' key not found in the HDF5 file.")
+
+
+def read_400_h5_patches(imp: str) -> torch.Tensor:
+    """Read image patches from an HDF5 file and return a tensor representing 400 patches.
+
+    Args:
+        imp (str): Path to the HDF5 file containing image patches.
+
+    Returns:
+        torch.Tensor: A tensor containing image patches of shape (n, 300, 300, 3).
+    """
+    tensor_list = []
+    idx_list = []
+    patches_per_slide = 20
+
+    with h5py.File(imp, "r") as h5_file:
+        if "imgs" in h5_file:
+            im_id = np.random.permutation(np.arange(h5_file["imgs"].shape[0]))
+
+            for idx in range (patches_per_slide):
+                curr_idx = idx % len(im_id)
+                img = h5_file["imgs"][im_id[curr_idx]]
+                tensor = torch.from_numpy(img[:].astype(np.float32)).contiguous()
+                tensor_list.append(tensor)
+                idx_list.append(im_id[curr_idx])
+
+            # print(f'tensor list {len(tensor_list)}')
+            # print(f'tensor {tensor_list[0].shape}')
+            stacked_tensor = torch.stack(tensor_list, dim=0)
+            # print(f'stacked {stacked_tensor.shape}')
+            return stacked_tensor,idx_list
+        else:
+            print(f'no imgs key')
+            raise KeyError("'imgs' key not found in the HDF5 file.")
+
+
 def get_srh_base_aug() -> List:
     """Base processing augmentations for all SRH images"""
     u16_min = (0, 0)
     u16_max = (65536, 65536)  # 2^16
     return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop()]
+
+def get_tcga_base_aug() -> List:
+    """Base processing augmentations for all tcga images"""
+    u16_min = (0, 0,0)
+    u16_max = (65536, 65536, 65536)  # 2^16
+    return [Normalize(u16_min, u16_max), MinMaxChop()]
 
 
 def get_srh_vit_base_aug() -> List:
@@ -149,3 +233,8 @@ def get_strong_aug(augs, rand_prob) -> List:
 def get_srh_aug_list(augs, rand_prob=0.5) -> List:
     """Combine base and strong augmentations for OpenSRH training"""
     return get_srh_base_aug() + get_strong_aug(augs, rand_prob)
+
+
+def get_tcga_aug_list(augs, rand_prob=0.5) -> List:
+    """Combine base and strong augmentations for tcga training"""
+    return get_tcga_base_aug() + get_strong_aug(augs, rand_prob)

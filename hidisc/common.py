@@ -22,8 +22,8 @@ from torchvision.transforms import Compose
 
 import pytorch_lightning as pl
 
-from datasets.srh_dataset import HiDiscDataset
-from datasets.improc import get_srh_aug_list
+from datasets.srh_dataset import HiDiscDataset, HiDiscDataset_TCGA
+from datasets.improc import get_srh_aug_list, get_tcga_aug_list
 
 
 def get_optimizer_func(cf: Dict[str, Any]) -> callable:
@@ -207,7 +207,45 @@ def get_dataloaders(cf):
 
     return dataloader_callable(train_dset,
                                shuffle=True), dataloader_callable(val_dset,
-                                                                  shuffle=False)
+                                                                  shuffle=True)
+
+
+def get_dataloaders_tcga(cf):
+    """Create dataloader for contrastive experiments."""
+    train_dset = HiDiscDataset_TCGA(
+        data_root=cf["data"]["db_root"],
+        studies="train",
+        transform=Compose(get_tcga_aug_list(cf["data"]["train_augmentation"])),
+        balance_study_per_class=cf["data"]["balance_study_per_class"],
+        num_slide_samples=cf["data"]["hidisc"]["num_slide_samples"],
+        num_patch_samples=cf["data"]["hidisc"]["num_patch_samples"],
+        num_transforms=cf["data"]["hidisc"]["num_transforms"])
+    val_dset = HiDiscDataset_TCGA(
+        data_root=cf["data"]["db_root"],
+        studies="val",
+        transform=Compose(get_tcga_aug_list(cf["data"]["valid_augmentation"])),
+        balance_study_per_class=False,
+        num_slide_samples=cf["data"]["hidisc"]["num_slide_samples"],
+        num_patch_samples=cf["data"]["hidisc"]["num_patch_samples"],
+        num_transforms=cf["data"]["hidisc"]["num_transforms"])
+
+    dataloader_callable = partial(torch.utils.data.DataLoader,
+                                  batch_size=cf['training']['batch_size'],
+                                  drop_last=False,
+                                  pin_memory=True,
+                                  num_workers=get_num_worker(),
+                                  persistent_workers=True)
+
+    # dataloader_callable = partial(torch.utils.data.DataLoader,
+    #                               batch_size=cf['training']['batch_size'],
+    #                               drop_last=False,
+    #                               pin_memory=True,
+    #                               num_workers=1,
+    #                               persistent_workers=True)
+
+    return dataloader_callable(train_dset,
+                               shuffle=True), dataloader_callable(val_dset,
+                                                                  shuffle=True)
 
 # def get_dataloaders(cf):
 #     """Create dataloader for contrastive experiments."""
