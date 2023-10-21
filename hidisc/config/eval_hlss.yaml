@@ -1,17 +1,23 @@
 infra:
-    log_dir: /data1/dri/hidisc/hidisc/datasets/opensrh/hidisc_strongaug # where all the experiments are
-    exp_name: patient # use the same name as the training experiment
+    log_dir: /data1/dri/hidisc/hidisc/exps # where all the experiments are
+    exp_name: Exp002 # use the same name as the training experiment
     comment: patient_disc_dev # can use this to customize for each experiment
-    seed: 3000
+    seed: 1000
 model:
-    backbone: resnet50
+    backbone: RN50
     mlp_hidden: []
-    num_embedding_out: 128
+    num_embedding_out: 7
+    templates: ["a histopathology slide showing {c}",
+            "histopathology image of {c}",
+            "pathology tissue showing {c}",
+            "presence of {c} tissue on image"]
 data:
     db_root:  /data1/dri/hidisc/hidisc/datasets/opensrh
-    backbone: resnet50
+    data_classes : { 'hgg' : 'high grade glioma', 'lgg' : 'low grade glioma', 'mening' : 'meningioma','metast' : 'metastatic tumor', 'normal' : 'normal brain tissue', 'pituita' : 'pituitary adenoma', 
+           'schwan' : 'schwannoma'}
+    backbone: RN50
     mlp_hidden: []
-    num_embedding_out: 128
+    num_embedding_out: 7
     train_alg: hidisc
 eval:
     # predict_batch_size: 128
@@ -39,5 +45,5 @@ eval:
     # ckpt_path : f93d0124-Sep25-00-40-13-slide_disc_weak_/models/ckpt-epoch23999.ckpt
     
     #HiDisc-Slide + strong augs
-    ckpt_path : 46de6893-Sep26-10-03-35-patient_disc_dev_/models/ckpt-epoch23999.ckpt
+    ckpt_path : a1988db4-Oct18-00-06-09-patient_disc_dev_/models/ckpt-epoch13199.ckpt
     

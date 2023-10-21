@@ -24,6 +24,8 @@ from losses.hidisc import HiDiscLoss
 
 from clip.clip import load
 
+from eval_knn_hlss import *
+
 import warnings
 
 # Ignore all warnings
@@ -32,9 +34,8 @@ warnings.filterwarnings("ignore")
 # os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 
 import wandb
-# wandb login --relogin
-# Initialize Wandb
-wandb.init(project='Exp002')
+
+wandb.init(project="HLSS")
 
 
 class HiDiscSystem(pl.LightningModule):
@@ -164,6 +165,7 @@ class HiDiscSystem(pl.LightningModule):
             logging.info(f"val/{k}_manualepoch {val_loss_k}")
             wandb.log({f"val/{k}": val_loss_k})
             self.val_loss[k].reset()
+
 
     def configure_optimizers(self):
         # if not training, no optimizer

@@ -6,7 +6,7 @@ Licensed under the MIT License. See LICENSE for license information.
 
 from typing import Optional, List, Tuple, Dict
 from functools import partial
-
+from PIL import Image
 import random
 import tifffile
 import numpy as np
@@ -185,7 +185,11 @@ def get_srh_base_aug() -> List:
     """Base processing augmentations for all SRH images"""
     u16_min = (0, 0)
     u16_max = (65536, 65536)  # 2^16
-    return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop()]
+    #added resizing to 224x224 to make compatible with CLIP ResNet50
+    return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop(),Resize(size=(224,224), interpolation=Image.BICUBIC)]
+    # for hidisc ResNet50
+    # return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop()]
+
 
 def get_tcga_base_aug() -> List:
     """Base processing augmentations for all tcga images"""

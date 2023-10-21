@@ -1,0 +1,218 @@
+infra:
+    log_dir: /data1/dri/hidisc/hidisc/exps/Exp006 # where all the experiments are
+    exp_name: hlss_attr # create a subdirectory for each set of experiments
+    comment: patient_disc_dev # can use this to customize for each experiment
+    seed: 1000
+data:
+    db_root: /data1/dri/hidisc/hidisc/datasets/opensrh
+    data_classes : {"Cellularity","Nuclear Pleomorphism","Vascularity","Tissue Architecture","Necrosis","Cell Infiltration",
+    "Inflammatory Response","Molecular Markers","Lipid Content","Protein Density","Nucleic Acid Presence","Cellular Morphology",
+    "Chemical Composition","Microcalcifications","Cytoplasmic Inclusions","Stromal Components","Mitotic Figures","Myelin Content"}
+    train_augmentation:
+        - which: random_horiz_flip
+          params: {}
+        - which: random_vert_flip
+          params: {}
+        - which: gaussian_noise
+          params: {}
+        - which: color_jitter
+          params: {}
+        - which: random_autocontrast
+          params: {}
+        - which: random_solarize
+          params:
+            threshold: 0.2
+        - which: random_sharpness
+          params:
+            sharpness_factor: 2
+        - which: gaussian_blur
+          params:
+            kernel_size: 5
+            sigma: 1
+        - which: random_affine
+          params:
+            degrees: 10
+            translate: [0.1, 0.3]
+        - which: random_resized_crop
+          params:
+            size: 224
+        - which: random_erasing
+          params: {}
+    valid_augmentation:
+        - which: random_horiz_flip
+          params: {}
+        - which: random_vert_flip
+          params: {}
+        - which: gaussian_noise
+          params: {}
+        - which: color_jitter
+          params: {}
+        - which: random_autocontrast
+          params: {}
+        - which: random_solarize
+          params:
+            threshold: 0.2
+        - which: random_sharpness
+          params:
+            sharpness_factor: 2
+        - which: gaussian_blur
+          params:
+            kernel_size: 5
+            sigma: 1
+        - which: random_affine
+          params:
+            degrees: 10
+            translate: [0.1, 0.3]
+        - which: random_resized_crop
+          params:
+            size: 224
+        - which: random_erasing
+          params: {}
+    rand_aug_prob: 0.3
+    hidisc:
+        num_slide_samples: 2
+        num_patch_samples: 2
+        num_transforms: 2
+    balance_study_per_class: true
+model:
+    backbone: RN50
+    mlp_hidden: []
+    num_embedding_out: 18
+
+    templates: {
+    "Cellularity": [
+      "A histopathology slide showing high cellularity.",
+      "Histopathology image of highly cellular tissue.",
+      "Pathology tissue showing high cellularity.",
+      "Presence of highly cellular tissue on the image."
+    ],
+    "Nuclear Pleomorphism": [
+      "Noticeable variation in nuclear size and shape in the histopathology image.",
+      "The histological slide exhibits significant nuclear pleomorphism.",
+      "Presence of nuclear size diversity on the pathology slide.",
+      "High nuclear pleomorphism is evident in the tissue image."
+    ],
+    "Vascularity": [
+      "A histopathology image highlighting prominent vascular patterns.",
+      "The tissue exhibits a well-defined vascular network.",
+      "The presence of distinct blood vessels is visible in the pathology slide.",
+      "Vascularity is a notable feature in the image."
+    ],
+    "Tissue Architecture": [
+      "The histological slide displays organized tissue architecture.",
+      "Tissue structures are clearly defined in the pathology image.",
+      "Distinctive tissue architecture is evident in the tissue sample.",
+      "Tissue organization is a key feature in the image."
+    ],
+    "Necrosis": [
+      "The presence of necrotic regions is visible in the histopathology image.",
+      "Necrosis is apparent in the pathology tissue.",
+      "Notable areas of tissue necrosis are seen in the slide.",
+      "The image displays tissue with visible necrotic changes."
+    ],
+    "Cell Infiltration": [
+      "The histological slide shows extensive cell infiltration into the surrounding tissue.",
+      "Cell invasion is evident in the pathology image.",
+      "Infiltration of tumor cells into healthy tissue is notable in the slide.",
+      "The image reveals extensive cell infiltration."
+    ],
+    "Inflammatory Response": [
+      "An inflammatory response is observed in the histopathology image.",
+      "The presence of inflammatory cells is evident in the pathology tissue.",
+      "The image highlights a clear immune system response.",
+      "Inflammation is a key feature in the tissue image."
+    ],
+    "Molecular Markers": [
+      "The histological slide exhibits distinct molecular markers.",
+      "Presence of specific genetic markers is visible in the pathology image.",
+      "Molecular markers provide valuable information in the tissue sample.",
+      "The image showcases important molecular marker data."
+    ],
+    "Lipid Content": [
+      "The image shows variations in lipid content within the tissue.",
+      "Lipid-rich regions are evident in the histopathology slide.",
+      "Lipid content contributes to the tissue's distinct appearance in the pathology image.",
+      "The tissue displays notable variations in lipid content."
+    ],
+    "Protein Density": [
+      "Protein density is visibly different in various areas of the histological slide.",
+      "The pathology image exhibits variations in protein concentration.",
+      "The tissue's protein density is a prominent feature in the image.",
+      "Protein density varies across the tissue sample."
+    ],
+    "Nucleic Acid Presence": [
+      "The presence of nucleic acids is evident in the histopathology image.",
+      "Distinct Raman peaks indicate the localization of nucleic acids in the pathology tissue.",
+      "The image reveals the presence of DNA and RNA within the tissue.",
+      "Nucleic acids are a notable component of the tissue sample."
+    ],
+    "Cellular Morphology": [
+      "The histological slide provides insights into cellular morphology, including cell size and shape.",
+      "Cellular organization and structure are observable in the pathology image.",
+      "Distinct cell morphologies are evident in the tissue sample.",
+      "Cellular morphology varies across different regions of the image."
+    ],
+    "Chemical Composition": [
+      "The image displays a diverse chemical composition within the tissue.",
+      "Specific chemical components are visually identified in the histopathology slide.",
+      "Chemical composition data is vital for characterizing the tissue in the pathology image.",
+      "Variations in chemical composition are evident throughout the tissue sample."
+    ],
+    "Microcalcifications": [
+      "Microcalcifications are visible as small, bright specks in the histopathology image.",
+      "Distinct microcalcifications are evident in the pathology tissue.",
+      "The image showcases the presence of tiny calcium deposits in the tissue.",
+      "Microcalcifications add a unique feature to the overall appearance of the image."
+    ],
+    "Cytoplasmic Inclusions": [
+      "Cytoplasmic inclusions can be observed within the cells in the histopathology image.",
+      "Distinctive cytoplasmic inclusions are present in the pathology tissue.",
+      "The image reveals abnormal structures within the cell's cytoplasm, known as inclusions.",
+      "Cytoplasmic inclusions contribute to the unique cellular features of the image."
+    ],
+    "Stromal Components": [
+      "The image displays stromal components, including fibrous tissue and collagen fibers.",
+      "Distinct stromal elements are evident in the histopathology slide.",
+      "Stromal components provide important context for the overall tissue structure in the pathology image.",
+      "Variations in stromal components influence the tissue's appearance in different regions of the image."
+    ],
+    "Mitotic Figures": [
+      "Mitotic figures are visible as cells in the process of cell division in the histopathology image.",
+      "The image highlights cells undergoing mitosis in the pathology tissue.",
+      "Mitotic figures contribute to the assessment of tumor growth and aggressiveness in the tissue.",
+      "The presence and frequency of mitotic figures provide valuable insights into the image."
+    ],
+    "Myelin Content": [
+      "The image reveals variations in myelin content within the tissue.",
+      "Distinct myelin-rich regions are observable in the histopathology slide.",
+      "Myelin content contributes to the tissue's distinct appearance in the pathology image.",
+      "Variations in myelin content are evident across the tissue sample."
+   
+
+  ]
+}
+
+training:
+    objective:
+        which: hidisc
+        params:
+            lambda_patient: 1.0
+            lambda_slide: 1.0
+            lambda_patch: 1.0
+            supcon_params:
+                temperature: 0.07
+                base_temperature: 0.07
+                contrast_mode: all
+    # batch_size: 10
+    batch_size: 32
+    num_epochs: 40000
+    optimizer: adamw # [sgd, adam, adamw]
+    learn_rate: 1.0e-3
+    scheduler:
+        which: cos_warmup
+        params:
+            num_warmup_steps: 0.1
+            num_cycles: 0.5
+    imagenet_backbone_checkpoint: null
+    # eval_ckpt_ep_freq: 400
+    eval_ckpt_ep_freq: 400

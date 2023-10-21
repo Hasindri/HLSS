@@ -67,16 +67,29 @@ class CLIPTextClassifier(nn.Module):
     def __init__(self, arch:str,labels: Dict[str, str], templates: List[str],device = 'cuda') -> None:
         super().__init__()
 
-        model, pct, pv = open_clip.create_model_and_transforms(arch)
+        model, pct, pv = open_clip.create_model_and_transforms(arch,device='cpu', pretrained="/data1/dri/hidisc/hidisc/models/rn50-quickgelu-cc12m-f000538c.pt")
         tokenizer = open_clip.get_tokenizer(arch)
+
+        # self.device = device
+        # self.model = model.to(device)
         
         zeroshot_weights = []
 
-        for classname in labels.values():
+        for classname in labels:
             # print(f'classname {classname}')
-            texts = [template.format(c=classname) for template in templates]
+
+            #train_hlss
+            # texts = [template.format(c=classname) for template in templates]
+
+            #train_hlss_attr
+            texts = templates[classname]
+
+
             texts = tokenizer(texts) # tokenize
+            # texts = texts.to(self.device)
+            
             class_embeddings = model.encode_text(texts)
+        
             # print(f'class embeddings {class_embeddings.shape}')
             class_embedding = F.normalize(class_embeddings, dim=-1).mean(dim=0)
             class_embedding /= class_embedding.norm()
@@ -158,16 +171,17 @@ class CLIPVisual(nn.Module):
     def __init__(self, arch:str,device='cuda') -> None:
         super().__init__()
 
-        model, pct, pv = open_clip.create_model_and_transforms(arch)
+        model, pct, pv = open_clip.create_model_and_transforms(arch,device=device, pretrained="/data1/dri/hidisc/hidisc/models/rn50-quickgelu-cc12m-f000538c.pt")
         self.device = device
         self.model = model.to(device)
         self.traintransform = pct
 
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # print(f'visual input {x.shape}')
 
-        x = [transforms.ToPILImage()(image) for image in x]
-        x = torch.stack([self.traintransform(image) for image in x]) 
+        # x = [transforms.ToPILImage()(image) for image in x]
+        # x = torch.stack([self.traintransform(image) for image in x]) 
         # print(f'transofrmed x {x.shape}')
         x = x.to(self.device)
         x = self.model.encode_image(x, normalize=True)

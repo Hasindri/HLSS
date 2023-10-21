@@ -74,7 +74,7 @@ data:
 model:
     backbone: resnet50
     mlp_hidden: []
-    num_embedding_out: 7
+    num_embedding_out: 128
 training:
     objective:
         which: hidisc
@@ -88,7 +88,7 @@ training:
                 contrast_mode: all
     # batch_size: 10
     batch_size: 32
-    num_epochs: 1
+    num_epochs: 40000
     optimizer: adamw # [sgd, adam, adamw]
     learn_rate: 1.0e-3
     scheduler:

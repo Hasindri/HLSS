@@ -72,7 +72,7 @@ class OpenSRHDataset(Dataset):
         self.instances_ = []
         for p in tqdm(self.studies_):
             self.instances_.extend(self.get_study_instances(p))
-        print(f'total {studies} patch count {len(self.instances_)}')
+        # print(f'total {studies} patch count {len(self.instances_)}')
 
         if balance_patch_per_class:
             self.replicate_balance_instances()
@@ -107,10 +107,10 @@ class OpenSRHDataset(Dataset):
 
             if studies == "train":
                 self.studies_ = train_val_split["train"]
-                print(f'train patient count {len(self.studies_)}')
+                # print(f'train patient count {len(self.studies_)}')
             elif studies in ["valid", "val"]:
                 self.studies_ = train_val_split["val"]
-                print(f'val patient count {len(self.studies_)}')
+                # print(f'val patient count {len(self.studies_)}')
             else:
                 return ValueError(
                     "studies split must be one of [\"train\", \"val\"]")

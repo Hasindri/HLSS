@@ -5,8 +5,8 @@ infra:
     seed: 1000
 data:
     db_root: /data1/dri/hidisc/hidisc/datasets/opensrh
-    data_classes : { 'hgg' : 'high grade glioma', 'lgg' : 'low grade glioma', 'mening' : 'meningioma','metast' : 'metastatic tumor', 'normal' : 'normal brain tissue', 'pituita' : 'pituitary adenoma', 
-           'schwan' : 'schwannoma'}
+    data_classes : {'high grade glioma', 'low grade glioma', 'meningioma','metastatic tumor', 'normal brain tissue', 'pituitary adenoma', 
+    'schwannoma'}
     train_augmentation:
         - which: random_horiz_flip
           params: {}
@@ -34,7 +34,7 @@ data:
             translate: [0.1, 0.3]
         - which: random_resized_crop
           params:
-            size: 300
+            size: 224
         - which: random_erasing
           params: {}
     valid_augmentation:
@@ -64,7 +64,7 @@ data:
             translate: [0.1, 0.3]
         - which: random_resized_crop
           params:
-            size: 300
+            size: 224
         - which: random_erasing
           params: {}
     rand_aug_prob: 0.3
