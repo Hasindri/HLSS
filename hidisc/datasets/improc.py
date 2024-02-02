@@ -17,8 +17,8 @@ from torchvision.transforms import (
     Normalize, RandomApply, Compose, RandomHorizontalFlip, RandomVerticalFlip,
     Resize, RandAugment, RandomErasing, RandomAutocontrast, Grayscale,
     RandomSolarize, ColorJitter, RandomAdjustSharpness, GaussianBlur,
-    RandomAffine, RandomResizedCrop)
-
+    RandomAffine, RandomResizedCrop, CenterCrop)
+from torchvision.transforms import Compose, Resize,ToPILImage, CenterCrop, ToTensor, Normalize, RandomResizedCrop
 
 class GetThirdChannel(torch.nn.Module):
     """Computes the third channel of SRH image
@@ -185,11 +185,61 @@ def get_srh_base_aug() -> List:
     """Base processing augmentations for all SRH images"""
     u16_min = (0, 0)
     u16_max = (65536, 65536)  # 2^16
+
+    #original srh base aug + Imagenet CLIP aug + hidisc train aug from config file
+    preprocess_fn = Compose([
+        Resize(size=224, interpolation=Image.BICUBIC), 
+        CenterCrop(size=(224, 224)),
+        ToTensor(),
+        Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])])
+
+    # return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop(),ToPILImage(), preprocess_fn]
+
     #added resizing to 224x224 to make compatible with CLIP ResNet50
     return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop(),Resize(size=(224,224), interpolation=Image.BICUBIC)]
+
     # for hidisc ResNet50
     # return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop()]
 
+def get_srh_base_aug_dino() -> List:
+    """Base processing augmentations for all SRH images"""
+    u16_min = (0, 0)
+    u16_max = (65536, 65536)  # 2^16
+
+    #original srh base aug + Imagenet CLIP aug + hidisc train aug from config file
+    preprocess_fn = Compose([
+        Resize(size=224, interpolation=Image.BICUBIC), 
+        CenterCrop(size=(224, 224)),
+        ToTensor(),
+        Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])])
+
+    # return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop(),ToPILImage(), preprocess_fn]
+
+    #added resizing to 224x224 to make compatible with CLIP ResNet50
+    return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop(),ToPILImage(), Resize(size=(224,224), interpolation=Image.BICUBIC)]
+
+
+def get_srh_base_aug_hidisc() -> List:
+    """Base processing augmentations for all SRH images"""
+    u16_min = (0, 0)
+    u16_max = (65536, 65536)  # 2^16
+
+    #original srh base aug + Imagenet CLIP aug + hidisc train aug from config file
+    preprocess_fn = Compose([
+        Resize(size=224, interpolation=Image.BICUBIC), 
+        CenterCrop(size=(224, 224)),
+        ToTensor(),
+        Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])])
+
+    # return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop(),ToPILImage(), preprocess_fn]
+
+    #added resizing to 224x224 to make compatible with CLIP ResNet50
+    # return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop(),Resize(size=(224,224), interpolation=Image.BICUBIC)]
+
+    # for hidisc ResNet50
+    return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop()]
+
+    
 
 def get_tcga_base_aug() -> List:
     """Base processing augmentations for all tcga images"""
@@ -237,6 +287,14 @@ def get_strong_aug(augs, rand_prob) -> List:
 def get_srh_aug_list(augs, rand_prob=0.5) -> List:
     """Combine base and strong augmentations for OpenSRH training"""
     return get_srh_base_aug() + get_strong_aug(augs, rand_prob)
+
+def get_srh_aug_list_dino(augs, rand_prob=0.5) -> List:
+    """Combine base and strong augmentations for OpenSRH training"""
+    return get_srh_base_aug_dino() + get_strong_aug(augs, rand_prob)
+
+def get_srh_aug_list_hidisc(augs, rand_prob=0.5) -> List:
+    """Combine base and strong augmentations for OpenSRH training"""
+    return get_srh_base_aug_hidisc() + get_strong_aug(augs, rand_prob)
 
 
 def get_tcga_aug_list(augs, rand_prob=0.5) -> List:

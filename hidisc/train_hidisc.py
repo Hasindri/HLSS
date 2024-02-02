@@ -10,6 +10,8 @@ from functools import partial
 from typing import Dict, Any
 import os
 
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+
 import torch
 
 import pytorch_lightning as pl
@@ -19,7 +21,7 @@ import torchmetrics
 from models import MLP, resnet_backbone, ContrastiveLearningNetwork
 from common import (setup_output_dirs, parse_args, get_exp_name,
                            config_loggers, get_optimizer_func,
-                           get_scheduler_func, get_dataloaders)
+                           get_scheduler_func, get_dataloaders_hidisc)
 from losses.hidisc import HiDiscLoss
 
 import warnings
@@ -27,16 +29,18 @@ import warnings
 # Ignore all warnings
 warnings.filterwarnings("ignore")
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+import wandb
 
+wandb.init(project="HLSS")
 
 
 class HiDiscSystem(pl.LightningModule):
     """Lightning system for hidisc experiments."""
 
-    def __init__(self, cf: Dict[str, Any], num_it_per_ep: int):
+    def __init__(self, cf: Dict[str, Any], num_it_per_ep: int,freeze_mlp: bool):
         super().__init__()
         self.cf_ = cf
+        self.freeze_mlp = freeze_mlp
 
         if cf["model"]["backbone"] == "resnet50":
             bb = partial(resnet_backbone, arch=cf["model"]["backbone"])
@@ -48,6 +52,12 @@ class HiDiscSystem(pl.LightningModule):
                       hidden_layers=cf["model"]["mlp_hidden"],
                       n_out=cf["model"]["num_embedding_out"])
         self.model = ContrastiveLearningNetwork(bb, mlp)
+
+        # print(f'model keys {self.model.proj}')
+
+        if self.freeze_mlp:
+            for param in self.model.proj.parameters():
+                param.requires_grad = False
 
         if "training" in cf:
             crit_params = cf["training"]["objective"]["params"]
@@ -79,21 +89,21 @@ class HiDiscSystem(pl.LightningModule):
         return pred.reshape(*batch["image"].shape[:4], pred.shape[-1])
 
     def training_step(self, batch, _):
-        print(f'batch {batch["image"].shape}')
+        # print(f'batch {batch["image"].shape}')
         im_reshaped = batch["image"].reshape(-1, *batch["image"].shape[-3:])
-        print(f'im_reshaped {im_reshaped.shape}')
+        # print(f'im_reshaped {im_reshaped.shape}')
         pred = self.model(im_reshaped)
         pred = pred.reshape(*batch["image"].shape[:4], pred.shape[-1])
-        print(f'pred {pred.shape}')
+        # print(f'pred {pred.shape}')
 
         pred_gather = self.all_gather(pred, sync_grads=True)
         pred_gather = pred_gather.reshape(-1, *pred_gather.shape[2:])
         label_gather = self.all_gather(batch["label"]).reshape(-1, 1)
-        print(f'pred_gather {pred_gather.shape}')
-        print(f'label_gather {label_gather.shape}')
+        # print(f'pred_gather {pred_gather.shape}')
+        # print(f'label_gather {label_gather.shape}')
 
         losses = self.criterion(pred_gather, label_gather)
-        print(f'losses {losses}')
+        # print(f'losses {losses}')
 
         bs = batch["image"][0].shape[0] * torch.cuda.device_count()
         log_partial = partial(self.log,
@@ -143,6 +153,7 @@ class HiDiscSystem(pl.LightningModule):
                      sync_dist=True,
                      rank_zero_only=True)
             logging.info(f"train/{k}_manualepoch {train_loss_k}")
+            wandb.log({f"train/{k}": train_loss_k})
             self.train_loss[k].reset()
 
     def on_validation_epoch_end(self):
@@ -154,6 +165,7 @@ class HiDiscSystem(pl.LightningModule):
                      sync_dist=True,
                      rank_zero_only=True)
             logging.info(f"val/{k}_manualepoch {val_loss_k}")
+            wandb.log({f"val/{k}": val_loss_k})
             self.val_loss[k].reset()
 
     def configure_optimizers(self):
@@ -162,7 +174,8 @@ class HiDiscSystem(pl.LightningModule):
             return None
 
         # get optimizer
-        opt = get_optimizer_func(self.cf_)(self.model.parameters())
+        # opt = get_optimizer_func(self.cf_)(self.model.parameters())
+        opt = get_optimizer_func(self.cf_)(filter(lambda p: p.requires_grad, self.model.parameters()))
 
         # check if use a learn rate scheduler
         sched_func = get_scheduler_func(self.cf_, self.num_it_per_ep_)
@@ -194,7 +207,7 @@ def main():
     cp_config(cf_fd.name)
     config_loggers(exp_root)
 
-    train_loader, valid_loader = get_dataloaders(cf)
+    train_loader, valid_loader = get_dataloaders_hidisc(cf)
     system_func = HiDiscSystem
 
     logging.info(f"num devices: {torch.cuda.device_count()}")
@@ -240,24 +253,8 @@ def main():
         check_val_every_n_epoch=cf["training"]["eval_ckpt_ep_freq"],
         num_nodes=1)
     
-    exp = HiDiscSystem(cf, num_it_per_ep)
-       
-    # Load pre-trained checkpoint if it exists
-    # ckpt_path = "/l/users/hasindri.watawana/hidisc/datasets/opensrh/hidisc_train/8d0f44c5-Jul31-14-57-44-patient_disc_dev_/models/ckpt-epoch6799.ckpt"
-    # if os.path.isfile(ckpt_path):
-    #     print("Loading pre-trained checkpoint...")
-    #     checkpoint = torch.load(ckpt_path)
-    #     # print(f'checkpoint {checkpoint["optimizer_states"]["optimizer"]}')
-        
-    #     exp = HiDiscSystem.load_from_checkpoint(ckpt_path, cf=cf, num_it_per_ep=num_it_per_ep)
+    exp = HiDiscSystem(cf, num_it_per_ep,freeze_mlp=False)
 
-    # # Update optimizer and scheduler states from the checkpoint
-    #     if 'optimizer_states' in checkpoint:
-    #         trainer.optimizers[0].load_state_dict(checkpoint['optimizer_states'][0])
-    #     if 'lr_schedulers' in checkpoint:
-    #         trainer.lr_schedulers[0]['scheduler'].load_state_dict(checkpoint['lr_schedulers'][0]['scheduler'])
-    # else:
-    #     exp = HiDiscSystem(cf, num_it_per_ep)
 
 
     trainer.fit(exp,

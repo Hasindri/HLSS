@@ -1,8 +1,8 @@
 infra:
-    log_dir: /data1/dri/hidisc/hidisc/exps # where all the experiments are
-    exp_name: Exp001 # create a subdirectory for each set of experiments
+    log_dir: /data1/dri/hidisc/hidisc/exps/Exp012 # where all the experiments are
+    exp_name: b # create a subdirectory for each set of experiments
     comment: patient_disc_dev # can use this to customize for each experiment
-    seed: 2000
+    seed: 1000
 data:
     db_root: /data1/dri/hidisc/hidisc/datasets/opensrh
     train_augmentation:
@@ -75,6 +75,7 @@ model:
     backbone: resnet50
     mlp_hidden: []
     num_embedding_out: 128
+    noof_cls: 7
 training:
     objective:
         which: hidisc
@@ -88,7 +89,7 @@ training:
                 contrast_mode: all
     # batch_size: 10
     batch_size: 32
-    num_epochs: 40000
+    num_epochs: 10
     optimizer: adamw # [sgd, adam, adamw]
     learn_rate: 1.0e-3
     scheduler:
@@ -98,4 +99,4 @@ training:
             num_cycles: 0.5
     imagenet_backbone_checkpoint: null
     # eval_ckpt_ep_freq: 400
-    eval_ckpt_ep_freq: 400
+    eval_ckpt_ep_freq: 5

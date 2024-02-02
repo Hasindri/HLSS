@@ -1,6 +1,6 @@
 infra:
     log_dir: /data1/dri/hidisc/hidisc/exps # where all the experiments are
-    exp_name: Exp002 # use the same name as the training experiment
+    exp_name: Exp011 # use the same name as the training experiment
     comment: patient_disc_dev # can use this to customize for each experiment
     seed: 1000
 model:
@@ -45,5 +45,5 @@ eval:
     # ckpt_path : f93d0124-Sep25-00-40-13-slide_disc_weak_/models/ckpt-epoch23999.ckpt
     
     #HiDisc-Slide + strong augs
-    ckpt_path : a1988db4-Oct18-00-06-09-patient_disc_dev_/models/ckpt-epoch13199.ckpt
+    ckpt_path : /data1/dri/hidisc/hidisc/models/rn50-quickgelu-cc12m-f000538c.pt
     

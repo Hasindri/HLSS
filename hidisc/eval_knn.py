@@ -22,12 +22,17 @@ from torchvision.transforms import Compose
 
 import pytorch_lightning as pl
 from torchmetrics import AveragePrecision, Accuracy
+from torchmetrics.classification import MulticlassAccuracy
 
 from datasets.srh_dataset import OpenSRHDataset
-from datasets.improc import get_srh_base_aug, get_srh_vit_base_aug
+from datasets.improc import get_srh_base_aug, get_srh_vit_base_aug, get_srh_base_aug_hidisc
 from common import (parse_args, get_exp_name, config_loggers,
                            get_num_worker)
-from train_hidisc import HiDiscSystem
+from train_clip import HiDiscSystem
+
+import wandb
+
+wandb.init(project="HLSS")
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -77,6 +82,8 @@ def get_embeddings(cf: Dict[str, Any],
     """Run forward pass on the dataset, and generate embeddings and logits"""
     # get model
     if cf["model"]["backbone"] == "resnet50":
+        aug_func = get_srh_base_aug_hidisc
+    elif cf["model"]["backbone"] == "RN50":
         aug_func = get_srh_base_aug
     elif cf["model"]["backbone"] == "vit":
         aug_func = get_srh_vit_base_aug
@@ -115,22 +122,27 @@ def get_embeddings(cf: Dict[str, Any],
         persistent_workers=True)
 
     # load lightning checkpoint
-    ckpt_path = os.path.join(cf["infra"]["log_dir"], cf["infra"]["exp_name"],
-                             cf["eval"]["ckpt_path"])
+    # ckpt_path = os.path.join(cf["infra"]["log_dir"], cf["infra"]["exp_name"],
+    #                          cf["eval"]["ckpt_path"])
+    
+    ckpt_path = cf["eval"]["ckpt_path"]
+    print(f'ckpt path {ckpt_path}')
 
-    model = HiDiscSystem.load_from_checkpoint(ckpt_path,
-                                              cf=cf,
-                                              num_it_per_ep=0,
-                                              max_epochs=-1,
-                                              nc=0)
-
-    # create trainer
+    model = HiDiscSystem(cf=cf, num_it_per_ep=0,freeze_mlp=True)
+    
     trainer = pl.Trainer(accelerator="gpu",
                          devices=1,
                          max_epochs=-1,
                          default_root_dir=exp_root,
                          enable_checkpointing=False,
                          logger=False)
+
+
+    # model = HiDiscSystem.load_from_checkpoint(ckpt_path,
+    #                                           cf=cf,
+    #                                           num_it_per_ep=0,
+    #                                           max_epochs=-1,
+    #                                           nc=0)
 
     # generate predictions
     train_predictions = trainer.predict(model, dataloaders=train_loader)
@@ -231,46 +243,56 @@ def make_specs(predictions: Dict[str, Union[torch.Tensor, List[str]]]) -> None:
 
     # generate metrics
     def get_all_metrics(logits, label):
-        map = AveragePrecision(num_classes=7,task="multiclass")
+        # map = AveragePrecision(num_classes=7,task="multiclass")
         acc = Accuracy(task="multiclass",num_classes=7)
-        t2 = Accuracy(task="multiclass",num_classes=7, top_k=2)
-        t3 = Accuracy(task="multiclass",num_classes=7, top_k=3)
+        # t2 = Accuracy(task="multiclass",num_classes=7, top_k=2)
+        # t3 = Accuracy(task="multiclass",num_classes=7, top_k=3)
         mca = Accuracy(task="multiclass",num_classes=7, average="macro")
+        per_cls = MulticlassAccuracy(num_classes=7, average=None)
 
         acc_val = acc(logits, label)
-        t2_val = t2(logits, label)
-        t3_val = t3(logits, label)
+        # t2_val = t2(logits, label)
+        # t3_val = t3(logits, label)
         mca_val = mca(logits, label)
-        map_val = map(logits, label)
+        percls_val = per_cls(logits,label)
+        # map_val = map(logits, label)
 
-        return torch.stack((acc_val, t2_val, t3_val, mca_val, map_val))
+        # return torch.stack((acc_val, t2_val, t3_val, mca_val, map_val))
+        return acc_val, mca_val,percls_val
 
-    all_metrics = torch.vstack((get_all_metrics(patch_logits, patch_label),
-                                get_all_metrics(slides_logits, slides_label),
-                                get_all_metrics(patient_logits,
-                                                patient_label)))
-    all_metrics = pd.DataFrame(all_metrics,
-                               columns=["acc", "t2", "t3", "mca", "map"],
-                               index=["patch", "slide", "patient"])
+    patch_acc_val, patch_mca_val,patch_percls_val = get_all_metrics(patch_logits, patch_label)
+    slide_acc_val, slide_mca_val,slide_percls_val = get_all_metrics(slides_logits, slides_label)
+    patient_acc_val, patient_mca_val,patient_percls_val = get_all_metrics(patient_logits, patient_label)
+
+    print(patch_acc_val, patch_mca_val,patch_percls_val)
+    print(slide_acc_val, slide_mca_val,slide_percls_val)
+    print(patient_acc_val, patient_mca_val,patient_percls_val)
+    
+    wandb.log({f"eval_knn/patch_acc": get_all_metrics(patch_logits, patch_label)[0]})
+    wandb.log({f"eval_knn/slide_acc": get_all_metrics(slides_logits, slides_label)[0]})
+    wandb.log({f"eval_knn/patient_acc": get_all_metrics(patient_logits,patient_label)[0]})
+    wandb.log({f"eval_knn/patch_mca": get_all_metrics(patch_logits, patch_label)[1]})
+    wandb.log({f"eval_knn/slide_mca": get_all_metrics(slides_logits, slides_label)[1]})
+    wandb.log({f"eval_knn/patient_mca": get_all_metrics(patient_logits,patient_label)[1]})
 
     # generate confusion matrices
-    patch_conf = confusion_matrix(y_true=patch_label,
-                                  y_pred=patch_logits.argmax(dim=1))
+    # patch_conf = confusion_matrix(y_true=patch_label,
+    #                               y_pred=patch_logits.argmax(dim=1))
 
-    slide_conf = confusion_matrix(y_true=slides_label,
-                                  y_pred=slides_logits.argmax(dim=1))
+    # slide_conf = confusion_matrix(y_true=slides_label,
+    #                               y_pred=slides_logits.argmax(dim=1))
 
-    patient_conf = confusion_matrix(y_true=patient_label,
-                                    y_pred=patient_logits.argmax(dim=1))
+    # patient_conf = confusion_matrix(y_true=patient_label,
+    #                                 y_pred=patient_logits.argmax(dim=1))
 
-    print("\nmetrics")
-    print(all_metrics)
-    print("\npatch confusion matrix")
-    print(patch_conf)
-    print("\nslide confusion matrix")
-    print(slide_conf)
-    print("\npatient confusion matrix")
-    print(patient_conf)
+    # print("\nmetrics")
+    # print(all_metrics)
+    # print("\npatch confusion matrix")
+    # print(patch_conf)
+    # print("\nslide confusion matrix")
+    # print(slide_conf)
+    # print("\npatient confusion matrix")
+    # print(patient_conf)
 
     return
 

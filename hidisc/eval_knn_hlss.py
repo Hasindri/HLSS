@@ -27,7 +27,7 @@ from datasets.srh_dataset import OpenSRHDataset
 from datasets.improc import get_srh_base_aug, get_srh_vit_base_aug
 from common import (parse_args, get_exp_name, config_loggers,
                            get_num_worker)
-from train_hlss import HiDiscSystem
+from train_hlss_128out import HiDiscSystem
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 

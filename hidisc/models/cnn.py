@@ -64,19 +64,29 @@ class CLIPTextClassifier(nn.Module):
     Forward pass returns a tensor.
     """
 
-    def __init__(self, arch:str,labels: Dict[str, str], templates: List[str],device = 'cuda') -> None:
+    def __init__(self, n_in: int, hidden_layers: List[int],n_out: int, 
+                 arch:str,labels: Dict[str, str], templates: List[str],device = "cuda" if torch.cuda.is_available() else "cpu") -> None:
         super().__init__()
 
+        #init MLP
+        layers_in = [n_in] + hidden_layers
+        layers_out = hidden_layers + [n_out]
+
+        layers_list = list(
+            chain.from_iterable((nn.Linear(a, b), nn.ReLU())
+                                for a, b in zip(layers_in, layers_out)))[:-1]
+        self.layers = nn.Sequential(*layers_list)
+        # print(f'init mlp {self.layers}')
+
+        #init mlp weights
         model, pct, pv = open_clip.create_model_and_transforms(arch,device='cpu', pretrained="/data1/dri/hidisc/hidisc/models/rn50-quickgelu-cc12m-f000538c.pt")
         tokenizer = open_clip.get_tokenizer(arch)
-
-        # self.device = device
-        # self.model = model.to(device)
         
         zeroshot_weights = []
 
-        for classname in labels:
-            # print(f'classname {classname}')
+        
+        # for classname in labels:
+        for classname in templates.keys():
 
             #train_hlss
             # texts = [template.format(c=classname) for template in templates]
@@ -84,28 +94,40 @@ class CLIPTextClassifier(nn.Module):
             #train_hlss_attr
             texts = templates[classname]
 
-
             texts = tokenizer(texts) # tokenize
-            # texts = texts.to(self.device)
-            
             class_embeddings = model.encode_text(texts)
-        
-            # print(f'class embeddings {class_embeddings.shape}')
             class_embedding = F.normalize(class_embeddings, dim=-1).mean(dim=0)
             class_embedding /= class_embedding.norm()
-            # print(f'class embedding {class_embedding.shape}')
+
             zeroshot_weights.append(class_embedding)
+        del model
                     
         zeroshot_weights = torch.stack(zeroshot_weights, dim=1)
 
         self.device = device
-       
-
         self.zeroshot_weights = zeroshot_weights
+        # self.zeroshot_weights = self.zeroshot_weights.to(self.device)
+
+        # print(f'zeroshot weights {self.zeroshot_weights.t().shape}')
+        # self.layers.apply(self.zeroshot_weights)
+
+        if hasattr(self, 'zeroshot_weights'):
+            for i,linear_layer in enumerate(self.layers):
+                # print(f'linear_layer {linear_layer}')
+        
+                with torch.no_grad():
+                    # print(f' linear_layer {linear_layer.weight.shape}')
+                    linear_layer.weight.copy_(self.zeroshot_weights.t())
+                    linear_layer.bias.zero_()
+
+        # print(f'linear_layer {linear_layer.weight[0]}')
+
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        self.zeroshot_weights = self.zeroshot_weights.to(self.device)
-        return (100. * x @ self.zeroshot_weights)
+        # self.zeroshot_weights = self.zeroshot_weights.to(self.device)
+        # return (100. * x @ self.zeroshot_weights)
+        return self.layers(x)
 
 
 class ContrastiveLearningNetwork(torch.nn.Module):
@@ -120,16 +142,11 @@ class ContrastiveLearningNetwork(torch.nn.Module):
         self.proj = proj()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # print(f'x {x.shape}')
+
         bb_out = self.bb(x)
-        # print(f'bb out {bb_out.shape}')
-        #bb_out_norm = torch.nn.functional.normalize(bb_out, p=2.0, dim=1)
         proj_out = self.proj(bb_out)
         proj_out_norm = torch.nn.functional.normalize(proj_out, p=2.0, dim=1)
-        # print(f'proj_out_norm {proj_out_norm.unsqueeze(1).shape}')
 
-        # print(f"Is proj_out_norm on CUDA/GPU? {proj_out_norm.is_cuda}")
-        # print(f"Data type (dtype) of proj_out_norm elements: {proj_out_norm.dtype}")
 
 
         return proj_out_norm.unsqueeze(1)
@@ -147,19 +164,99 @@ class HLSSContrastiveLearningNetwork(torch.nn.Module):
         self.proj = proj()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # print(f'x {x.shape}')
         bb_out = self.bb(x)
-        # print(f'bb out {bb_out.shape}')
-        #bb_out_norm = torch.nn.functional.normalize(bb_out, p=2.0, dim=1)
         proj_out = self.proj(bb_out)
         proj_out_norm = torch.nn.functional.normalize(proj_out, p=2.0, dim=1)
-        # print(f'proj_out_norm {proj_out_norm.unsqueeze(1).shape}')
-
-        # print(f"Is proj_out_norm on CUDA/GPU? {proj_out_norm.is_cuda}")
-        # print(f"Data type (dtype) of proj_out_norm elements: {proj_out_norm.dtype}")
+ 
 
 
         return proj_out_norm.unsqueeze(1)
+
+
+class HLSSHidiscNetwork(torch.nn.Module):
+    """A network consists of a backbone and 2 projection heads.
+
+    Forward pass returns the normalized embeddings after a projection layer.
+    """
+
+    def __init__(self, backbone: callable, proj1: callable, proj2: callable):
+        super(HLSSHidiscNetwork, self).__init__()
+        self.bb = backbone()
+        self.proj1 = proj1()
+        self.proj2 = proj2()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        bb_out = self.bb(x)
+
+        #CLIPTextClassifier
+        proj_out1 = self.proj1(bb_out)
+        #MLP
+        proj_out2 = self.proj2(bb_out)
+
+        proj_out_norm1 = torch.nn.functional.normalize(proj_out1, p=2.0, dim=1)
+        proj_out_norm2 = torch.nn.functional.normalize(proj_out2, p=2.0, dim=1)
+ 
+
+
+        return proj_out_norm1.unsqueeze(1), proj_out_norm2.unsqueeze(1)
+    
+class ResnetHLSSNetwork(torch.nn.Module):
+    """A network consists of a backbone and 2 projection heads.
+
+    Forward pass returns the normalized embeddings after a projection layer.
+    """
+
+    def __init__(self, backbone: callable, proj1: callable, proj2: callable):
+        super(ResnetHLSSNetwork, self).__init__()
+        self.bb = backbone()
+        self.proj1 = proj1()
+        self.proj2 = proj2()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        bb_out = self.bb(x)
+
+        #MLP
+        proj_out1 = self.proj1(bb_out)
+        #CLIPTextClassifier
+        proj_out2 = self.proj2(proj_out1)
+
+  
+        proj_out_norm2 = torch.nn.functional.normalize(proj_out2, p=2.0, dim=1)
+ 
+
+
+        return proj_out_norm2.unsqueeze(1)
+
+
+class three_MLP(torch.nn.Module):
+    """A network consists of a backbone and 3 MLP projection heads.
+
+    Forward pass returns the normalized embeddings after projection layers.
+    """
+
+    def __init__(self, backbone: callable, proj1: callable, proj2: callable, proj3: callable):
+        super(three_MLP, self).__init__()
+        self.bb = backbone()
+        self.proj1 = proj1()
+        self.proj2 = proj2()
+        self.proj3 = proj3()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        bb_out = self.bb(x)
+
+        #MLP1
+        proj_out1 = self.proj1(bb_out)
+        #MLP2
+        proj_out2 = self.proj2(bb_out)
+        #MLP3
+        proj_out3 = self.proj3(bb_out)
+
+        proj_out_norm1 = torch.nn.functional.normalize(proj_out1, p=2.0, dim=1)
+        proj_out_norm2 = torch.nn.functional.normalize(proj_out2, p=2.0, dim=1)
+        proj_out_norm3 = torch.nn.functional.normalize(proj_out3, p=2.0, dim=1)
+
+
+        return proj_out_norm1.unsqueeze(1), proj_out_norm2.unsqueeze(1), proj_out_norm3.unsqueeze(1)
     
 
 class CLIPVisual(nn.Module):
@@ -168,25 +265,52 @@ class CLIPVisual(nn.Module):
     Forward pass returns a tensor.
     """
 
-    def __init__(self, arch:str,device='cuda') -> None:
+    def __init__(self, arch:str,device="cuda" if torch.cuda.is_available() else "cpu") -> None:
         super().__init__()
 
+       
         model, pct, pv = open_clip.create_model_and_transforms(arch,device=device, pretrained="/data1/dri/hidisc/hidisc/models/rn50-quickgelu-cc12m-f000538c.pt")
+        
         self.device = device
         self.model = model.to(device)
         self.traintransform = pct
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # print(f'visual input {x.shape}')
 
-        # x = [transforms.ToPILImage()(image) for image in x]
-        # x = torch.stack([self.traintransform(image) for image in x]) 
-        # print(f'transofrmed x {x.shape}')
         x = x.to(self.device)
         x = self.model.encode_image(x, normalize=True)
-        # print(f'image_features {x.shape}')
 
         return x
     
 
+class HLSSGranularNetwork(torch.nn.Module):
+    """A network consists of a backbone and 2 projection heads.
+
+    Forward pass returns the normalized embeddings after a projection layer.
+    """
+
+    def __init__(self, backbone: callable, proj1: callable, proj2: callable, proj3: callable):
+        super(HLSSGranularNetwork, self).__init__()
+        self.bb = backbone()
+        self.proj1 = proj1()
+        self.proj2 = proj2()
+        self.proj3 = proj3()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        bb_out = self.bb(x)
+
+        #CLIPTextClassifier patch
+        proj_out1 = self.proj1(bb_out)
+        #CLIPTextClassifier slide
+        proj_out2 = self.proj2(bb_out)
+        #CLIPTextClassifier patient
+        proj_out3 = self.proj3(bb_out)
+
+        proj_out_norm1 = torch.nn.functional.normalize(proj_out1, p=2.0, dim=1)
+        proj_out_norm2 = torch.nn.functional.normalize(proj_out2, p=2.0, dim=1)
+        proj_out_norm3 = torch.nn.functional.normalize(proj_out3, p=2.0, dim=1)
+ 
+
+
+        return proj_out_norm1.unsqueeze(1), proj_out_norm2.unsqueeze(1), proj_out_norm3.unsqueeze(1)

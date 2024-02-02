@@ -24,7 +24,7 @@ import pytorch_lightning as pl
 from torchmetrics import AveragePrecision, Accuracy
 
 from datasets.srh_dataset import OpenSRHDataset
-from datasets.improc import get_srh_base_aug, get_srh_vit_base_aug
+from datasets.improc import get_srh_base_aug, get_srh_vit_base_aug, get_srh_base_aug_hidisc
 from common import (parse_args, get_exp_name, config_loggers,
                            get_num_worker)
 from train_hidisc import HiDiscSystem
@@ -76,46 +76,52 @@ def knn_predict(feature, feature_bank, feature_labels, classes: int,
 
 
 def get_embeddings(cf: Dict[str, Any], ckpt:str,
-                   exp_root: str) -> Dict[str, Union[torch.Tensor, List[str]]]:
+                   exp_root: str,train_loader,val_loader) -> Dict[str, Union[torch.Tensor, List[str]]]:
     """Run forward pass on the dataset, and generate embeddings and logits"""
     # get model
-    if cf["model"]["backbone"] == "resnet50":
-        aug_func = get_srh_base_aug
-    elif cf["model"]["backbone"] == "vit":
-        aug_func = get_srh_vit_base_aug
-    else:
-        raise NotImplementedError()
+    # if cf["model"]["backbone"] == "resnet50":
+    #     aug_func = get_srh_base_aug_hidisc
+    # elif cf["model"]["backbone"] == "RN50":
+    #     aug_func = get_srh_base_aug
+    # elif cf["model"]["backbone"] == "vit":
+    #     aug_func = get_srh_vit_base_aug
+    # else:
+    #     raise NotImplementedError()
 
-    # get dataset / loader
-    train_dset = OpenSRHDataset(data_root=cf["data"]["db_root"],
-                                studies="train",
-                                transform=Compose(aug_func()),
-                                balance_patch_per_class=False)
-    train_dset.reset_index()
-
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dset,
-        batch_size=cf["eval"]["predict_batch_size"],
-        drop_last=False,
-        pin_memory=True,
-        num_workers=get_num_worker(),
-        persistent_workers=True)
-
-    val_dset = OpenSRHDataset(data_root=cf["data"]["db_root"],
-                              studies="val",
-                              transform=Compose(aug_func()),
-                              balance_patch_per_class=False)
-    val_dset.reset_index()
+    # # get dataset / loader
+    # train_dset = OpenSRHDataset(data_root=cf["data"]["db_root"],
+    #                             studies="train",
+    #                             transform=Compose(aug_func()),
+    #                             balance_patch_per_class=False)
+    # train_dset.reset_index()
 
 
-    val_loader = torch.utils.data.DataLoader(
-        val_dset,
-        batch_size=cf["eval"]["predict_batch_size"],
-        drop_last=False,
-        pin_memory=True,
-        num_workers=get_num_worker(),
-        persistent_workers=True)
+    # train_loader = torch.utils.data.DataLoader(
+    #     train_dset,
+    #     batch_size=cf["eval"]["predict_batch_size"],
+    #     drop_last=False,
+    #     pin_memory=True,
+    #     num_workers=get_num_worker(),
+    #     persistent_workers=True)
+
+    # val_dset = OpenSRHDataset(data_root=cf["data"]["db_root"],
+    #                           studies="val",
+    #                           transform=Compose(aug_func()),
+    #                           balance_patch_per_class=False)
+    # val_dset.reset_index()
+
+
+    # val_loader = torch.utils.data.DataLoader(
+    #     val_dset,
+    #     batch_size=cf["eval"]["predict_batch_size"],
+    #     drop_last=False,
+    #     pin_memory=True,
+    #     num_workers=get_num_worker(),
+    #     persistent_workers=True)
+
+
+    # logging.info(f"num devices: {torch.cuda.device_count()}")
+    # logging.info(f"num workers in dataloader: {train_loader.num_workers}")
 
     # load lightning checkpoint
     ckpt_path = os.path.join(cf["infra"]["log_dir"], cf["infra"]["exp_name"],
@@ -125,7 +131,7 @@ def get_embeddings(cf: Dict[str, Any], ckpt:str,
                                               cf=cf,
                                               num_it_per_ep=0,
                                               max_epochs=-1,
-                                              nc=0)
+                                              nc=0,freeze_mlp=True)
 
     # create trainer
     trainer = pl.Trainer(accelerator="gpu",
@@ -138,16 +144,6 @@ def get_embeddings(cf: Dict[str, Any], ckpt:str,
     # generate predictions
     train_predictions = trainer.predict(model, dataloaders=train_loader)
     val_predictions = trainer.predict(model, dataloaders=val_loader)
-
-    # train_predictions = None
-    # val_predictions = None
-
-    # try:
-    #     train_predictions = trainer.predict(model, dataloaders=train_loader)
-    #     val_predictions = trainer.predict(model, dataloaders=val_loader)
-    
-    # except tifffile.TiffFileError as e:
-    #     logging.warning(f"Caught TiffFileError: {e}. Skipping this data point.")
 
     def process_predictions(predictions):
         pred = {}
@@ -170,8 +166,8 @@ def get_embeddings(cf: Dict[str, Any], ckpt:str,
                                              dim=1)
     # print(f'val_embs {val_embs.shape}')
 
-    print(f'train_predictions embeddings {train_predictions["embeddings"].shape}')
-    print(f'train_predictions labels {train_predictions["label"].shape}')
+    # print(f'train_predictions embeddings {train_predictions["embeddings"].shape}')
+    # print(f'train_predictions labels {train_predictions["label"].shape}')
 
     # knn evaluation
     batch_size = cf["eval"]["knn_batch_size"]
@@ -194,6 +190,7 @@ def get_embeddings(cf: Dict[str, Any], ckpt:str,
         torch.cuda.empty_cache()
 
     val_predictions["logits"] = torch.vstack(all_scores)
+    del model
     return val_predictions
 
 
@@ -329,25 +326,76 @@ def main():
     cp_config(cf_fd.name)
     config_loggers(exp_root)
 
+    #dataset
+    if cf["model"]["backbone"] == "resnet50":
+        aug_func = get_srh_base_aug_hidisc
+    elif cf["model"]["backbone"] == "RN50":
+        aug_func = get_srh_base_aug
+    elif cf["model"]["backbone"] == "vit":
+        aug_func = get_srh_vit_base_aug
+    else:
+        raise NotImplementedError()
+
+    # get dataset / loader
+    train_dset = OpenSRHDataset(data_root=cf["data"]["db_root"],
+                                studies="train",
+                                transform=Compose(aug_func()),
+                                balance_patch_per_class=False)
+    train_dset.reset_index()
+
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dset,
+        batch_size=cf["eval"]["predict_batch_size"],
+        drop_last=False,
+        pin_memory=True,
+        num_workers=get_num_worker(),
+        persistent_workers=True)
+
+    val_dset = OpenSRHDataset(data_root=cf["data"]["db_root"],
+                              studies="val",
+                              transform=Compose(aug_func()),
+                              balance_patch_per_class=False)
+    val_dset.reset_index()
+
+
+    val_loader = torch.utils.data.DataLoader(
+        val_dset,
+        batch_size=cf["eval"]["predict_batch_size"],
+        drop_last=False,
+        pin_memory=True,
+        num_workers=get_num_worker(),
+        persistent_workers=True)
+
     # get predictions
     if not cf["eval"].get("eval_predictions", None):
         logging.info("generating predictions")
         ckpt_list = os.listdir(os.path.join(cf["infra"]["log_dir"], cf["infra"]["exp_name"],
                              cf["eval"]["ckpt_dir"]))
-        print(f'ckpt list {len(ckpt_list)}')
+        # print(f'ckpt list {len(ckpt_list)}')
         ckpt_list_800 = []
+        epoch_list_800 = []
 
         for ckpt_string in ckpt_list:
             epoch_str = ckpt_string.split("epoch")[1].split(".")[0]
             epoch = int(epoch_str)
             
             if (epoch + 1) % 800 == 0:
-                ckpt_list_800.append(ckpt_string)
+                epoch_list_800.append(epoch)
+
+        epoch_list_800 = [epoch for epoch in epoch_list_800 if epoch >= 4800]
+        epoch_list_800.sort()
+        print(f'epoch list {epoch_list_800}')
+
+        for i in epoch_list_800:
+            ckpt = f"ckpt-epoch{i}.ckpt"
+            ckpt_list_800.append(ckpt)
 
         print(f'ckpt list {ckpt_list_800}')
 
         for ckpt in tqdm(ckpt_list_800):
-            predictions = get_embeddings(cf,ckpt, exp_root)
+            print(f'ckpt {ckpt}')
+            predictions = get_embeddings(cf,ckpt, exp_root,train_loader,val_loader)
             predpath = (ckpt.split(".")[0]).split("-")[1]
             # print(f'predpath {predpath}')
             # epoch = int(predpath[5:])
@@ -363,3 +411,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

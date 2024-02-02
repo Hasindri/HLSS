@@ -36,6 +36,7 @@ class HiDiscLoss(nn.Module):
         patient_emb = features.reshape(feat_shape[0], -1, emb_sz)
         slide_emb = features.reshape(sz_prod(feat_shape[0:2]), -1, emb_sz)
         patch_emb = features.reshape(sz_prod(feat_shape[0:3]), -1, emb_sz)
+        # breakpoint()
 
         patient_loss = self.criterion(patient_emb, None)
         slide_loss = self.criterion(slide_emb, None)
@@ -44,6 +45,10 @@ class HiDiscLoss(nn.Module):
         loss = ((self.lambda_patient_ * patient_loss) +
                 (self.lambda_slide_ * slide_loss) +
                 (self.lambda_patch_ * patch_loss))
+        
+        patient_loss = patient_loss * self.lambda_patient_
+        slide_loss = slide_loss * self.lambda_slide_
+        patch_loss = patch_loss * self.lambda_patch_
 
         return {
             "patient_loss": patient_loss,

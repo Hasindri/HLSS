@@ -25,13 +25,73 @@ from torchvision.transforms import (
     RandomSolarize, ColorJitter, RandomAdjustSharpness, GaussianBlur,
     RandomAffine, RandomResizedCrop)
 
+import numpy as np
+from PIL import Image
+import torch
+import torch.nn as nn
+import torch.distributed as dist
+import torch.backends.cudnn as cudnn
+import torch.nn.functional as F
+from torchvision import datasets, transforms
+from torchvision import models as torchvision_models
+
 from datasets.improc import process_read_im, get_srh_base_aug, get_tcga_base_aug, read_h5_patches,read_one_patch,read_400_h5_patches
-
-
+import utils
 class PatchData(TypedDict):
     image: Optional[torch.Tensor]
     label: Optional[torch.Tensor]
     path: Optional[List[str]]
+
+
+class DataAugmentationDINO(object):
+    def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
+        flip_and_color_jitter = transforms.Compose([
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomApply(
+                [transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)],
+                p=0.8
+            ),
+            transforms.RandomGrayscale(p=0.2),
+        ])
+        normalize = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        ])
+
+        # first global crop
+        self.global_transfo1 = transforms.Compose([
+            transforms.RandomResizedCrop(224, scale=global_crops_scale, interpolation=Image.BICUBIC),
+            flip_and_color_jitter,
+            utils.GaussianBlur(1.0),
+            normalize,
+        ])
+        # second global crop
+        self.global_transfo2 = transforms.Compose([
+            transforms.RandomResizedCrop(224, scale=global_crops_scale, interpolation=Image.BICUBIC),
+            flip_and_color_jitter,
+            utils.GaussianBlur(0.1),
+            utils.Solarization(0.2),
+            normalize,
+        ])
+        # transformation for the local small crops
+        self.local_crops_number = local_crops_number
+        self.local_transfo = transforms.Compose([
+            transforms.RandomResizedCrop(96, scale=local_crops_scale, interpolation=Image.BICUBIC),
+            flip_and_color_jitter,
+            utils.GaussianBlur(p=0.5),
+            normalize,
+        ])
+
+    def __call__(self, imglist):
+        allcrops = []
+        for slide in imglist:
+            crops = []
+            crops.append([self.global_transfo1(image) for image in slide])
+            crops.append([self.global_transfo2(image) for image in slide])
+            for _ in range(self.local_crops_number):
+                crops.append([self.local_transfo(image) for image in slide])
+            allcrops.append(crops)
+        return allcrops
 
 
 class OpenSRHDataset(Dataset):
@@ -101,6 +161,10 @@ class OpenSRHDataset(Dataset):
                         os.path.join(self.data_root_,
                                      "meta/updated2_train_val_split.json")) as fd:
                     train_val_split = json.load(fd)
+                # with open(
+                #         os.path.join(self.data_root_,
+                #                      "meta/updated2_train_val_split_ex.json")) as fd:
+                #     train_val_split = json.load(fd)
             except Exception as e:
                 logging.critical("Failed to locate preset train/val split.")
                 raise e
@@ -432,28 +496,6 @@ class HiDiscDataset(Dataset):
                 # pass
                 
 
-        # print(f'wanted noof patches {self.num_patch_samples_}')
-
-        # while len(images) < self.num_patch_samples_:
-        #     # print(f'index of curr_inst {im_id[idx % len(im_id)]}')
-        #     curr_inst = inst[im_id[idx % len(im_id)]]
-        #     print(f'curr_inst {curr_inst}')
-        #     try:
-        #         with process_read_im(curr_inst) as im:  # Use 'with' statement
-        #             images.append(im)
-        #             print(f'images {images}')
-        #         imps_take.append(curr_inst)
-        #         idx += 1
-                
-        #         # print(f'imps_take {imps_take}')
-        #     except Exception as e:
-        #         # logging.error("bad_file - {}".format(curr_inst))
-        #         # logging.warning(f"Error reading image: {e}")
-        #         pass
-        #     finally:
-        #         if 'im' in locals() and hasattr(im, 'close'):
-        #             im.close()
-
         assert self.transform_ is not None
         # print(f'srh patch0 {images[0].shape}')
         xformed_im = torch.stack([
@@ -503,29 +545,104 @@ class HiDiscDataset(Dataset):
     def __len__(self):
         return len(self.instances_)
 
-    # def __getitem__(self, idx: int) -> Union[PatchData, None]:
-    #     patient, target = self.instances_[idx]
+class HiDiscDINO(HiDiscDataset):
+    def __init__(self, *args, **kwargs):
+        super(HiDiscDINO, self).__init__(*args, **kwargs)
+
+    def read_images_slide(self, inst: List[Tuple]):
+        """Read in a list of patches, different patches and transformations"""
+
+        im_id = np.random.permutation(np.arange(len(inst)))
+        images = []
+        imps_take = []
+
+        idx = 0
+        while len(images) < self.num_patch_samples_:
+            curr_inst = inst[im_id[idx % len(im_id)]]
+            try:
+                images.append(process_read_im(curr_inst))
+                imps_take.append(curr_inst)
+                idx += 1
+            except:
+                logging.error("bad_file - {}".format(curr_inst))
+                idx += 1
+                # pass
+                
+
+        assert self.transform_ is not None
+
+        # xformed_im = torch.stack([
+        #     torch.stack(
+        #         [self.transform_(im) for _ in range(self.num_transforms_)])
+        #     for im in images
+        # ])
+
+        xformed_im = [self.transform_(im) for _ in range(self.num_transforms_)for im in images]
     
-    #     # Check if the patient ID exists in the updated metadata file
-    #     if patient not in self.metadata_:
-    #         print(f'patient ID {patient} is not in metadata')
-    #         return None
-        
-    #     num_slides = len(self.metadata_[patient]["slides"])
-    #     slide_idx = np.arange(num_slides)
-    #     np.random.shuffle(slide_idx)
-    #     num_repeat = self.num_slide_samples_ // len(patient) + 1
-    #     slide_idx = np.tile(slide_idx, num_repeat)[:self.num_slide_samples_]
+ 
+        return xformed_im, imps_take
 
-    #     images = [self.read_images_slide(patient[i]) for i in slide_idx]
-    #     im = torch.stack([i[0] for i in images])
-    #     imp = [i[1] for i in images]
+    def __getitem__(self, idx: int) -> PatchData:
+        """Retrieve patches from patient as specified by idx"""
+        patient, target = self.instances_[idx]
+        num_slides = len(patient)
+        slide_idx = np.arange(num_slides)
+        np.random.shuffle(slide_idx)
+        num_repeat = self.num_slide_samples_ // len(patient) + 1
+        slide_idx = np.tile(slide_idx, num_repeat)[:self.num_slide_samples_]
 
-    #     target = self.class_to_idx_[target]
-    #     if self.target_transform_ is not None:
-    #         target = self.target_transform_(target)
+        images = [self.read_images_slide(patient[i]) for i in slide_idx]
+        im = [i[0] for i in images]
+        imp = [i[1] for i in images]
 
-    #     return {"image": im, "label": target, "path": [imp]}
+        target = self.class_to_idx_[target]
+        # if self.target_transform_ is not None:
+        #     target = self.target_transform_(target)
+
+        # return {"image": im, "label": target, "path": [imp]}
+
+        transform = DataAugmentationDINO((0.4, 1.),(0.05, 0.4),8)
+        allcrops = transform(im)
+
+        #globalcrops
+        slide1 = allcrops[0]
+        patches1 = torch.stack([x for x in slide1[0]],dim=0)
+        patches2 = torch.stack([x for x in slide1[1]],dim=0)
+        global1 = torch.stack([patches1,patches2],dim=0)
+        slide2 = allcrops[1]
+        patches1 = torch.stack([x for x in slide2[0]],dim=0)
+        patches2 = torch.stack([x for x in slide2[1]],dim=0)
+        global2 = torch.stack([patches1,patches2],dim=0)
+        globalcrop = torch.stack([global1,global2],dim=0)
+        globalcrop = globalcrop.view(8, 3, 224, 224)
+
+        #localcrops
+        patches1 = torch.stack([x for x in slide1[2]],dim=0)
+        patches2 = torch.stack([x for x in slide1[3]],dim=0)
+        patches3 = torch.stack([x for x in slide1[4]],dim=0)
+        patches4 = torch.stack([x for x in slide1[5]],dim=0)
+        patches5 = torch.stack([x for x in slide1[6]],dim=0)
+        patches6 = torch.stack([x for x in slide1[7]],dim=0)
+        patches7 = torch.stack([x for x in slide1[8]],dim=0)
+        patches8 = torch.stack([x for x in slide1[9]],dim=0)
+        local1 = torch.stack([patches1,patches2, patches3,
+                              patches4, patches5,patches6,
+                              patches7,patches8],dim=0)
+        patches1 = torch.stack([x for x in slide2[2]],dim=0)
+        patches2 = torch.stack([x for x in slide2[3]],dim=0)
+        patches3 = torch.stack([x for x in slide2[4]],dim=0)
+        patches4 = torch.stack([x for x in slide2[5]],dim=0)
+        patches5 = torch.stack([x for x in slide2[6]],dim=0)
+        patches6 = torch.stack([x for x in slide2[7]],dim=0)
+        patches7 = torch.stack([x for x in slide2[8]],dim=0)
+        patches8 = torch.stack([x for x in slide2[9]],dim=0)
+        local2 = torch.stack([patches1,patches2, patches3,
+                              patches4, patches5,patches6,
+                              patches7,patches8],dim=0)
+        localcrop = torch.stack([local1,local2],dim=0)
+        localcrop = localcrop.view(32, 3, 96, 96)
+ 
+        return ([globalcrop,localcrop],target)
 
 class HiDiscDataset_TCGA(Dataset):
     """HiDisc dataset for TCGA"""

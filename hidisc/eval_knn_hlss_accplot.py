@@ -10,7 +10,7 @@ from shutil import copy2
 from functools import partial
 from typing import List, Union, Dict, Any
 import tifffile
-
+import csv
 import yaml
 import numpy as np
 import pandas as pd
@@ -27,7 +27,9 @@ from datasets.srh_dataset import OpenSRHDataset
 from datasets.improc import get_srh_base_aug, get_srh_vit_base_aug
 from common import (parse_args, get_exp_name, config_loggers,
                            get_num_worker)
-from train_hlss import HiDiscSystem
+# from train_hlss import HiDiscSystem
+# from train_hlss_patchtxt import HiDiscSystem
+from train_hlss_granular import HiDiscSystem
 
 import wandb
 
@@ -77,46 +79,8 @@ def knn_predict(feature, feature_bank, feature_labels, classes: int,
 
 
 def get_embeddings(cf: Dict[str, Any],ckpt:str,
-                   exp_root: str) -> Dict[str, Union[torch.Tensor, List[str]]]:
+                   exp_root: str,train_loader,val_loader) -> Dict[str, Union[torch.Tensor, List[str]]]:
     """Run forward pass on the dataset, and generate embeddings and logits"""
-    # get model
-    if cf["model"]["backbone"] == "RN50":
-        aug_func = get_srh_base_aug
-    elif cf["model"]["backbone"] == "vit":
-        aug_func = get_srh_vit_base_aug
-    else:
-        raise NotImplementedError()
-
-    # get dataset / loader
-    train_dset = OpenSRHDataset(data_root=cf["data"]["db_root"],
-                                studies="train",
-                                transform=Compose(aug_func()),
-                                balance_patch_per_class=False)
-    train_dset.reset_index()
-
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dset,
-        batch_size=cf["eval"]["predict_batch_size"],
-        drop_last=False,
-        pin_memory=True,
-        num_workers=get_num_worker(),
-        persistent_workers=True)
-
-    val_dset = OpenSRHDataset(data_root=cf["data"]["db_root"],
-                              studies="val",
-                              transform=Compose(aug_func()),
-                              balance_patch_per_class=False)
-    val_dset.reset_index()
-
-
-    val_loader = torch.utils.data.DataLoader(
-        val_dset,
-        batch_size=cf["eval"]["predict_batch_size"],
-        drop_last=False,
-        pin_memory=True,
-        num_workers=get_num_worker(),
-        persistent_workers=True)
 
     # load lightning checkpoint
     ckpt_path = os.path.join(cf["infra"]["log_dir"], cf["infra"]["exp_name"],
@@ -126,11 +90,11 @@ def get_embeddings(cf: Dict[str, Any],ckpt:str,
                                               cf=cf,
                                               num_it_per_ep=0,
                                               max_epochs=-1,
-                                              nc=0)
+                                              nc=0,freeze_mlp=True)
 
     # create trainer
     trainer = pl.Trainer(accelerator="gpu",
-                         devices=1,
+                         devices=-1,
                          max_epochs=-1,
                          default_root_dir=exp_root,
                          enable_checkpointing=False,
@@ -139,16 +103,7 @@ def get_embeddings(cf: Dict[str, Any],ckpt:str,
     # generate predictions
     train_predictions = trainer.predict(model, dataloaders=train_loader)
     val_predictions = trainer.predict(model, dataloaders=val_loader)
-
-    # train_predictions = None
-    # val_predictions = None
-
-    # try:
-    #     train_predictions = trainer.predict(model, dataloaders=train_loader)
-    #     val_predictions = trainer.predict(model, dataloaders=val_loader)
-    
-    # except tifffile.TiffFileError as e:
-    #     logging.warning(f"Caught TiffFileError: {e}. Skipping this data point.")
+    del model
 
     def process_predictions(predictions):
         pred = {}
@@ -161,7 +116,6 @@ def get_embeddings(cf: Dict[str, Any],ckpt:str,
 
     train_predictions = process_predictions(train_predictions)
     val_predictions = process_predictions(val_predictions)
-    # print(f' val predictions {val_predictions}')
 
     train_embs = torch.nn.functional.normalize(train_predictions["embeddings"],
                                                p=2,
@@ -169,10 +123,6 @@ def get_embeddings(cf: Dict[str, Any],ckpt:str,
     val_embs = torch.nn.functional.normalize(val_predictions["embeddings"],
                                              p=2,
                                              dim=1)
-    # print(f'val_embs {val_embs.shape}')
-
-    # print(f'train_predictions embeddings {train_predictions["embeddings"].shape}')
-    # print(f'train_predictions labels {train_predictions["label"].shape}')
 
     # knn evaluation
     batch_size = cf["eval"]["knn_batch_size"]
@@ -195,10 +145,11 @@ def get_embeddings(cf: Dict[str, Any],ckpt:str,
         torch.cuda.empty_cache()
 
     val_predictions["logits"] = torch.vstack(all_scores)
+    
     return val_predictions
 
 
-def make_specs(predictions: Dict[str, Union[torch.Tensor, List[str]]]) -> None:
+def make_specs(epoch_no, predictions: Dict[str, Union[torch.Tensor, List[str]]]) -> None:
     """Compute all specs for an experiment"""
 
     # aggregate prediction into a dataframe
@@ -261,28 +212,15 @@ def make_specs(predictions: Dict[str, Union[torch.Tensor, List[str]]]) -> None:
     wandb.log({f"eval_knn/slide_mca": get_all_metrics(slides_logits, slides_label)[1]})
     wandb.log({f"eval_knn/patient_mca": get_all_metrics(patient_logits,patient_label)[1]})
 
-    # all_metrics = pd.DataFrame(all_metrics,
-    #                            columns=["acc", "t2", "t3", "mca", "map"],
-    #                            index=["patch", "slide", "patient"])
+    csv_filename = "exp16a_eval.csv"
+    
+    with open(csv_filename, mode='a', newline='') as file:
+        writer = csv.writer(file)
 
-    # # generate confusion matrices
-    # patch_conf = confusion_matrix(y_true=patch_label,
-    #                               y_pred=patch_logits.argmax(dim=1))
+        # Write a new row with the provided values
+        writer.writerow([epoch_no,get_all_metrics(patch_logits, patch_label)[0], get_all_metrics(slides_logits, slides_label)[0], get_all_metrics(patient_logits,patient_label)[0]])
 
-    # slide_conf = confusion_matrix(y_true=slides_label,
-    #                               y_pred=slides_logits.argmax(dim=1))
 
-    # patient_conf = confusion_matrix(y_true=patient_label,
-    #                                 y_pred=patient_logits.argmax(dim=1))
-
-    # print("\nmetrics")
-    # print(all_metrics)
-    # print("\npatch confusion matrix")
-    # print(patch_conf)
-    # print("\nslide confusion matrix")
-    # print(slide_conf)
-    # print("\npatient confusion matrix")
-    # print(patient_conf)
 
     return
 
@@ -329,34 +267,96 @@ def main():
     cp_config(cf_fd.name)
     config_loggers(exp_root)
 
+    #create dataset
+    if cf["model"]["backbone"] == "RN50":
+        aug_func = get_srh_base_aug
+    elif cf["model"]["backbone"] == "vit":
+        aug_func = get_srh_vit_base_aug
+    else:
+        raise NotImplementedError()
+
+    # get dataset / loader
+    train_dset = OpenSRHDataset(data_root=cf["data"]["db_root"],
+                                studies="train",
+                                transform=Compose(aug_func()),
+                                balance_patch_per_class=False)
+    train_dset.reset_index()
+
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dset,
+        batch_size=cf["eval"]["predict_batch_size"],
+        drop_last=False,
+        pin_memory=True,
+        num_workers=get_num_worker(),
+        persistent_workers=True)
+
+    val_dset = OpenSRHDataset(data_root=cf["data"]["db_root"],
+                              studies="val",
+                              transform=Compose(aug_func()),
+                              balance_patch_per_class=False)
+    val_dset.reset_index()
+
+
+    val_loader = torch.utils.data.DataLoader(
+        val_dset,
+        batch_size=cf["eval"]["predict_batch_size"],
+        drop_last=False,
+        pin_memory=True,
+        num_workers=get_num_worker(),
+        persistent_workers=True)
+
     # get predictions
     if not cf["eval"].get("eval_predictions", None):
         logging.info("generating predictions")
         ckpt_list = os.listdir(os.path.join(cf["infra"]["log_dir"], cf["infra"]["exp_name"],
                              cf["eval"]["ckpt_dir"]))
-        print(f'ckpt list {len(ckpt_list)}')
+        # print(f'ckpt list {len(ckpt_list)}')
         ckpt_list_800 = []
+        epoch_list_800 = []
 
         for ckpt_string in ckpt_list:
             epoch_str = ckpt_string.split("epoch")[1].split(".")[0]
             epoch = int(epoch_str)
             
             if (epoch + 1) % 800 == 0:
-                ckpt_list_800.append(ckpt_string)
+                epoch_list_800.append(epoch)
 
-        print(ckpt_list_800)
+        epoch_list_800 = [epoch for epoch in epoch_list_800 if epoch >= 19200]
 
-        print(f'ckpt list {len(ckpt_list_800)}')
 
-        for ckpt in tqdm(ckpt_list_800):
-            predictions = get_embeddings(cf,ckpt, exp_root)
+        epoch_list_800.sort()
+        print(f'epoch list {epoch_list_800}')
+
+        for i in epoch_list_800:
+            ckpt = f"ckpt-epoch{i}.ckpt"
+            ckpt_list_800.append(ckpt)
+
+        # print(f'ckpt list {ckpt_list_800}')
+            
+        #CSV to save eval acccuracies
+        csv_filename = "exp16a_eval.csv"
+        try:
+            df = pd.read_csv(csv_filename)
+            
+        except FileNotFoundError:
+            columns = ['epoch','patch', 'slide', 'patient']
+            df = pd.DataFrame(columns=columns)
+            df.to_csv(csv_filename, index=False)
+
+        for epoch,ckpt in tqdm(enumerate(ckpt_list_800)):
+            epoch_no = epoch_list_800[epoch]
+            print(f'ckpt {ckpt}')
+            predictions = get_embeddings(cf,ckpt, exp_root,train_loader,val_loader)
             predpath = (ckpt.split(".")[0]).split("-")[1]
             # print(f'predpath {predpath}')
             # epoch = int(predpath[5:])
 
         
             torch.save(predictions, os.path.join(pred_dir, f"predictions_{predpath}.pt"))
-            make_specs(predictions)
+            make_specs(epoch_no,predictions)
+            # breakpoint()
+
             
     else:
         logging.info("loading predictions")
@@ -368,3 +368,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+#  ['ckpt-epoch799.ckpt', 'ckpt-epoch1599.ckpt', 'ckpt-epoch2399.ckpt', 'ckpt-epoch3199.ckpt', 'ckpt-epoch3999.ckpt', 'ckpt-epoch4799.ckpt', 'ckpt-epoch5599.ckpt', 'ckpt-epoch6399.ckpt', 'ckpt-epoch7199.ckpt', 'ckpt-epoch7999.ckpt', 'ckpt-epoch8799.ckpt', 'ckpt-epoch9599.ckpt', 'ckpt-epoch10399.ckpt', 'ckpt-epoch11199.ckpt', 'ckpt-epoch11999.ckpt']

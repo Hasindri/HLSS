@@ -203,3 +203,169 @@ def srh_desc3():
 }
     
     return srh_desc3
+
+
+
+srh_desc4 = {
+  "Cellularity": [
+    "Cell Density: The overall density of cells in the tissue, ranging from sparse to densely packed.",
+    "Nuclear Size Variation: Variation in cell size, which can indicate pleomorphism.",
+    "Cell Clustering: The arrangement of cells, including the presence of clusters or isolated cells.",
+    "Cell Dispersal: The uniformity of cell distribution within the tissue.",
+    "Cell Border Definition: The clarity of cell boundaries, as poorly defined borders can be associated with high cellularity.",
+    "Mitotic Activity: The presence and frequency of cells undergoing mitosis.",
+    "Cell Shape Irregularity: Irregular cell shapes, an indicator of pleomorphism.",
+    "Nuclear-Cytoplasmic Ratio: Variations in the ratio of nucleus to cytoplasm in cells.",
+    "Pleomorphic Cell Types: Presence of cell types exhibiting atypical or abnormal morphology.",
+    "Cellular Pleomorphism: Variations in cell morphology, including pleomorphism."
+  ],
+  "Nuclear Pleomorphism": [
+    "Nuclear Size Variation: Variation in nuclear size, a sign of nuclear pleomorphism.",
+    "Nuclear Shape Irregularity: Irregular nuclear shapes, an indicator of pleomorphism.",
+    "Chromatin Pattern: Differences in chromatin patterns among nuclei.",
+    "Nuclear Membrane Distortion: Distorted nuclear membranes in pleomorphic cells.",
+    "Nuclear Grooves: The presence of nuclear grooves in pleomorphic cells.",
+    "Hyperchromasia: Increased chromatin density in pleomorphic cells.",
+    "Heterogeneity of Nuclei: Variations in nuclear features among cells.",
+    "Abnormal Nuclear Structure: Irregular nuclear structures in pleomorphic cells."
+  ],
+  "Vascularity": [
+    "Blood Vessel Size: Variation in the size of blood vessels within the tissue.",
+    "Blood Vessel Density: Differences in blood vessel density.",
+    "Blood Vessel Morphology: Varied shapes and structures of blood vessels.",
+    "Vascular Patterning: Differences in vascular patterns within the tissue.",
+    "Blood Vessel Integrity: The condition and integrity of blood vessel walls.",
+    "Presence of Angiogenesis: Formation of new blood vessels.",
+    "Vascular Leakage: Leakage of blood components from vessels.",
+    "Pericyte Coverage: Presence and coverage of pericytes in blood vessels.",
+    "Vascular Tortuosity: Twisting or irregular curvature of blood vessels.",
+    "Hemorrhage: Presence of bleeding within or around vessels."
+  ],
+  "Necrosis": [
+    "Geographic Necrosis: Large, geographic regions of necrotic tissue.",
+    "Pseudo-Palisading Necrosis: Necrotic areas with characteristic pseudo-palisading pattern.",
+    "Central Necrosis: Central areas of cell death within the tissue.",
+    "Necrotic Patterns: Patterns and distribution of necrotic regions.",
+    "Apoptotic Bodies: Presence of apoptotic cells and cellular debris in necrotic areas."
+  ],
+  "Inflammatory Response": [
+    "Lymphocytic Infiltration: Infiltration by lymphocytes as part of an immune response.",
+    "Macrophage Infiltration: Infiltration by macrophages as part of an immune response.",
+    "Presence of Neutrophils: Infiltration by neutrophils as part of an immune response.",
+    "Immune Cell Aggregates: Clustering of immune cells within the tissue.",
+    "Inflammatory Patterns: Patterns in the distribution of inflammatory cells.",
+    "Presence of Plasma Cells: Infiltration by plasma cells as part of an immune response.",
+    "Eosinophil Infiltration: Infiltration by eosinophils as part of an immune response.",
+    "Granulocyte Infiltration: Infiltration by granulocytes as part of an immune response.",
+    "Inflammatory Cytokine Expression: Expression of inflammatory cytokines in the tissue.",
+    "Immune Cell Localization: Localization of immune cells in different regions."
+  ],
+  "Molecular Markers": [
+    "Genetic Mutations: Presence of specific genetic mutations or alterations.",
+    "Expression of Specific Proteins: Aberrant expression of specific proteins or markers.",
+    "Altered Protein Phosphorylation: Changes in the phosphorylation states of proteins.",
+    "Fusion Genes: Detection of fusion genes in the tissue.",
+    "Altered Apoptosis Regulators: Changes in the expression of apoptosis regulators.",
+    "Epigenetic Changes: Changes in DNA methylation patterns.",
+    "Aberrant Protein Phosphorylation: Altered protein phosphorylation states.",
+    "Presence of Fusion Genes: Detection of fusion genes in the tissue.",
+    "Altered Expression of Apoptosis Regulators: Changes in expression of apoptosis regulators.",
+    "Presence of Specific Molecular Markers: Detection of specific molecular markers or genetic alterations."
+  ],
+  "Lipid Content": [
+    "Lipid Droplet Presence: Presence of lipid droplets within the tissue.",
+    "Lipid Droplet Size Variation: Variation in the size of lipid droplets.",
+    "Lipid Droplet Distribution: Patterns in the distribution of lipid droplets.",
+    "Lipid Droplet Morphology: Different shapes and structures of lipid droplets.",
+    "Lipid-Rich Regions: Regions of tissue with high lipid content.",
+    "Lipid Vacuoles: The presence of lipid-filled vacuoles in the tissue.",
+    "Lipid Microdomains: Microscopic regions with distinct lipid composition.",
+    "Lipid Content Grading: Grading of lipid content in different areas.",
+    "Lipid Inclusions in Cells: Presence of lipid inclusions within cells.",
+    "Lipid Droplet Aggregates: Clustering of lipid droplets within the tissue."
+  ],
+  "Protein Density": [
+    "Protein Accumulation in Nuclei: Accumulation of proteins within cell nuclei.",
+    "Protein-Rich Vesicles: Presence of vesicles with high protein content.",
+    "Perinuclear Protein Patterns: Patterns of proteins around the cell nuclei.",
+    "Protease Digestion Resistance: Resistance of proteins to protease digestion.",
+    "Protein Microdomains: Microscopic regions with high protein density.",
+    "Protein Distribution Gradients: Gradients in protein concentration.",
+    "Protein Cluster Formation: Formation of protein clusters within cells.",
+    "Protein Aggregates: Aggregation of proteins within the tissue.",
+    "Protein Localization Patterns: Patterns in the subcellular localization of proteins.",
+    "Protein Concentration Variability: Variations in protein density across tissue regions."
+  ],
+  "Nucleic Acid Presence": [
+    "DNA Localization: Localization of DNA within the tissue.",
+    "RNA Localization: Localization of RNA within the tissue.",
+    "Nucleic Acid Distribution: Patterns of nucleic acid distribution.",
+    "DNA-RNA Co-Localization: Co-localization of DNA and RNA in cells.",
+    "Detection of Specific Gene Sequences: Identification of specific gene sequences.",
+    "Nucleic Acid Aggregates: Aggregation of nucleic acids within the tissue.",
+    "Nucleic Acid-rich Regions: Regions with high concentrations of nucleic acids.",
+    "Nucleic Acid Dot Structures: Presence of dot-like nucleic acid structures.",
+    "Nucleic Acid Inclusions: Inclusions of nucleic acids within cells.",
+    "Nucleic Acid Staining Patterns: Patterns in nucleic acid staining."
+  ],
+  "Cellular Morphology": [
+    "Cell Size Variation: Variation in cell size and shape within the tissue.",
+    "Cell Shape Irregularity: Irregular cell shapes and structures.",
+    "Cytoplasmic Vacuolation: Formation of vacuoles within the cytoplasm.",
+    "Cellular Inclusions: Presence of abnormal inclusions within cells.",
+    "Abnormal Cell Structures: Irregular cellular structures and organelles.",
+    "Cellular Pseudo-Inclusions: Presence of pseudo-inclusions within cells.",
+    "Cellular Polarity Changes: Changes in cell polarity and orientation.",
+    "Variations in Cytoplasmic Granules: Differences in cytoplasmic granules among cells.",
+    "Cellular Nuclear-Cytoplasmic Ratio: Variations in the ratio of nucleus to cytoplasm.",
+    "Cellular Membrane Irregularities: Irregularities in cell membrane structures."
+  ],
+  "Chemical Composition": [
+    "Chemical Component Diversity: Diversity in the types of chemical components present in the tissue.",
+    "Specific Molecule Detection: Detection of specific molecules or molecular markers.",
+    "Metabolite Localization: Localization of metabolites within the tissue.",
+    "Chemical Component Gradients: Gradients in the distribution of chemical components.",
+    "Chemical Component Aggregations: Aggregations of specific chemical components.",
+    "Detection of Metabolic Byproducts: Identification of metabolic byproducts.",
+    "Differences in Metabolite Concentrations: Variations in metabolite concentrations.",
+    "Chemical Component Variation Across Regions: Variations in chemical component distribution.",
+    "Metabolite-Rich Regions: Regions with high concentrations of specific metabolites.",
+    "Metabolic Pathway Indicators: Detection of indicators related to specific metabolic pathways."
+  ],
+  "Stromal Components": [
+    "Fibrous Tissue Density: Variations in the density of fibrous tissue within the tissue.",
+    "Collagen Fiber Presence: The presence and distribution of collagen fibers.",
+    "Stromal Aggregations: Aggregations of stromal components within the tissue.",
+    "Stromal Fiber Thickness: Variations in the thickness of stromal fibers.",
+    "Stromal Fiber Morphology: Varied shapes and structures of stromal fibers.",
+    "Stromal Localization Patterns: Patterns in the localization of stromal components.",
+    "Stromal Tissue Grading: Grading of the characteristics of stromal tissue.",
+    "Stromal Component Aggregates: Aggregations of stromal components within the tissue.",
+    "Stromal Fiber Distributions: Patterns in the distribution of stromal fibers.",
+    "Stromal Component Composition: Variations in the types of stromal components."
+  ],
+  "Mitotic Figures": [
+    "Mitotic Figure Frequency: Frequency of mitotic figures within the tissue.",
+    "Mitotic Figure Morphology: Variations in the shapes and structures of mitotic figures.",
+    "Mitotic Figure Localization: Localization of mitotic figures within tissue regions.",
+    "Mitotic Figure Size: Variation in the size of mitotic figures.",
+    "Presence of Abnormal Mitosis: Detection of abnormal mitotic figures.",
+    "Mitotic Figure Clusters: Clustering of mitotic figures within the tissue.",
+    "Mitotic Figure Distribution: Patterns in the distribution of mitotic figures.",
+    "Mitotic Figure Grading: Grading the characteristics of mitotic figures.",
+    "Mitotic Figure Aggregates: Aggregations of mitotic figures within the tissue.",
+    "Mitotic Figure Variability: Variations in mitotic figure characteristics."
+  ],
+  "Myelin Content": [
+    "Myelin Presence: Presence of myelin within the tissue.",
+    "Myelin Fiber Density: Differences in the density of myelin fibers.",
+    "Myelin Fiber Size: Variation in the size of myelin fibers.",
+    "Myelin Staining Intensity: Differences in the staining intensity of myelin.",
+    "Myelin Presence in Axons: Myelin coating on axons within the tissue.",
+    "Myelin Bundles: Bundled arrangements of myelin fibers.",
+    "Myelin Sheath Grading: Grading the characteristics of myelin sheaths.",
+    "Myelin Fiber Clustering: Clustering of myelin fibers within the tissue.",
+    "Myelin Variation Across Regions: Variations in myelin content in different tissue regions.",
+    "Myelin Fiber Morphology: Varied shapes and structures of myelin fibers."
+  ]
+}

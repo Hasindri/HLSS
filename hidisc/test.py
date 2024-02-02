@@ -17,7 +17,7 @@ from common import (setup_output_dirs, parse_args, get_exp_name,
 from datasets.improc import process_read_im, get_srh_base_aug
 
 import warnings
-
+import open_clip
 
 # Ignore all warnings
 warnings.filterwarnings("ignore")
@@ -142,40 +142,142 @@ warnings.filterwarnings("ignore")
 
 #----------------------------------------
 
+# import os
+
+# # Define the directory path
+# directory_path = '/l/users/hasindri.watawana/hidisc/datasets/tcga'
+
+# # Initialize a variable to store the total size in bytes
+# total_size_bytes = 0
+
+# # Function to calculate the size of a file or directory recursively
+# def calculate_size(path):
+#     if os.path.isfile(path):
+#         return os.path.getsize(path)
+#     elif os.path.isdir(path):
+#         total = 0
+#         for item in os.listdir(path):
+#             item_path = os.path.join(path, item)
+#             total += calculate_size(item_path)
+#         return total
+#     else:
+#         return 0
+
+# # Traverse the directory and calculate the total size
+# for root, dirs, files in os.walk(directory_path):
+#     for file in files:
+#         if file.endswith('.svs'):
+#             file_path = os.path.join(root, file)
+#             total_size_bytes += calculate_size(file_path)
+
+# # Convert the total size to gigabytes (GB)
+# total_size_gb = total_size_bytes / (1024 ** 3)
+
+# # Print the total size in GB
+# print(f"Total size of .svs files in GB: {total_size_gb:.4f} GB")
+
+# --------------------------------------------
+
+# model, pct, pv = open_clip.create_model_and_transforms("RN50",device='cuda', pretrained="/data1/dri/hidisc/hidisc/models/rn50-quickgelu-cc12m-f000538c.pt")
+
+# print(f'pct : {pct}')
+
+# ----------------------------------------------------------------------
+
+# from common import (setup_output_dirs, parse_args, get_exp_name,
+#                            config_loggers, get_optimizer_func,
+#                            get_scheduler_func, get_dataloaders)
+
+
+# cf_fd = parse_args()
+# # print (f'args {cf_fd}')
+# cf = yaml.load(cf_fd, Loader=yaml.FullLoader)
+
+# # print(f'cf {len(cf["model"]["templates"])}')
+
+# # l = list(cf["model"]["templates"].keys())
+
+
+# print(len(cf["model"]["patient_templates"].keys()))
+# print(len(cf["data"]["patient"]))
+
+# def has_duplicate_keys(d):
+#     return len(set(d.keys())) != len(d)
+
+# if has_duplicate_keys(cf["model"]["patient_templates"]):
+#     print("The dictionary has duplicate keys.")
+# else:
+#     print("The dictionary does not have duplicate keys.")
+
+# ------------------------------------------------------------------------------
+
+#DINO
+import argparse
 import os
+import sys
+import datetime
+import time
+import math
+import json
+from pathlib import Path
 
-# Define the directory path
-directory_path = '/l/users/hasindri.watawana/hidisc/datasets/tcga'
+import numpy as np
+from PIL import Image
+import torch
+import torch.nn as nn
+import torch.distributed as dist
+import torch.backends.cudnn as cudnn
+import torch.nn.functional as F
+from torchvision import datasets, transforms
+from torchvision import models as torchvision_models
 
-# Initialize a variable to store the total size in bytes
-total_size_bytes = 0
+import utils
+import vision_transformer as vits
+from vision_transformer import DINOHead
 
-# Function to calculate the size of a file or directory recursively
-def calculate_size(path):
-    if os.path.isfile(path):
-        return os.path.getsize(path)
-    elif os.path.isdir(path):
-        total = 0
-        for item in os.listdir(path):
-            item_path = os.path.join(path, item)
-            total += calculate_size(item_path)
-        return total
-    else:
-        return 0
+torchvision_archs = sorted(name for name in torchvision_models.__dict__
+    if name.islower() and not name.startswith("__")
+    and callable(torchvision_models.__dict__[name]))
 
-# Traverse the directory and calculate the total size
-for root, dirs, files in os.walk(directory_path):
-    for file in files:
-        if file.endswith('.svs'):
-            file_path = os.path.join(root, file)
-            total_size_bytes += calculate_size(file_path)
+dataset = datasets.ImageFolder("/data1/dri/hidisc/hidisc/datasets/opensrh/train")
+data_loader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=1,
+        num_workers=1,
+        pin_memory=True,
+        drop_last=True,
+    )
+print(f"Data loaded: there are {len(dataset)} images.")
 
-# Convert the total size to gigabytes (GB)
-total_size_gb = total_size_bytes / (1024 ** 3)
 
-# Print the total size in GB
-print(f"Total size of .svs files in GB: {total_size_gb:.4f} GB")
+student = torchvision_models.__dict__['resnet50']()
+teacher = torchvision_models.__dict__['resnet50']()
+embed_dim = student.fc.weight.shape[1]
 
+breakpoint()
+
+head =  DINOHead(
+        embed_dim,
+        65536,
+        use_bn=False,
+        norm_last_layer=True,
+    )
+x = torch.rand((2048))
+y = head(x)
+breakpoint()
+
+student = utils.MultiCropWrapper(student, DINOHead(
+        embed_dim,
+        65536,
+        use_bn=False,
+        norm_last_layer=True,
+    ))
+teacher = utils.MultiCropWrapper(
+        teacher,
+        DINOHead(embed_dim, 65536, False),
+    )
+
+breakpoint()
 
 
 
