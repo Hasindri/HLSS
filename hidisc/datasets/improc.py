@@ -206,15 +206,6 @@ def get_srh_base_aug_dino() -> List:
     u16_min = (0, 0)
     u16_max = (65536, 65536)  # 2^16
 
-    #original srh base aug + Imagenet CLIP aug + hidisc train aug from config file
-    preprocess_fn = Compose([
-        Resize(size=224, interpolation=Image.BICUBIC), 
-        CenterCrop(size=(224, 224)),
-        ToTensor(),
-        Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])])
-
-    # return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop(),ToPILImage(), preprocess_fn]
-
     #added resizing to 224x224 to make compatible with CLIP ResNet50
     return [Normalize(u16_min, u16_max), GetThirdChannel(), MinMaxChop(),ToPILImage(), Resize(size=(224,224), interpolation=Image.BICUBIC)]
 

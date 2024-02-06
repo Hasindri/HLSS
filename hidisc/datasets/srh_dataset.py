@@ -81,6 +81,13 @@ class DataAugmentationDINO(object):
             utils.GaussianBlur(p=0.5),
             normalize,
         ])
+        # self.local_transfo = transforms.Compose([
+        #     transforms.RandomResizedCrop(96, scale=local_crops_scale, interpolation=Image.BICUBIC),
+        #     flip_and_color_jitter,
+        #     utils.GaussianBlur(p=0.5),
+        #     normalize,
+        #     transforms.Resize((224, 224)),
+        # ])
 
     def __call__(self, imglist):
         allcrops = []
@@ -641,7 +648,8 @@ class HiDiscDINO(HiDiscDataset):
                               patches7,patches8],dim=0)
         localcrop = torch.stack([local1,local2],dim=0)
         localcrop = localcrop.view(32, 3, 96, 96)
- 
+        # localcrop = localcrop.view(32, 3, 224, 224)
+
         return ([globalcrop,localcrop],target)
 
 class HiDiscDataset_TCGA(Dataset):

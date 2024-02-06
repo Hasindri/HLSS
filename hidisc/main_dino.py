@@ -20,6 +20,7 @@ import math
 import json
 from pathlib import Path
 
+
 import numpy as np
 from PIL import Image
 import torch
@@ -33,7 +34,7 @@ from torchvision import models as torchvision_models
 
 import utils
 import vision_transformer as vits
-from vision_transformer import DINOHead
+from vision_transformer import DINOHead, CLIPTextDINOHead
 
 from datasets.srh_dataset import HiDiscDataset, HiDiscDataset_TCGA, HiDiscDINO
 from datasets.improc import get_srh_aug_list, get_srh_aug_list_hidisc, get_tcga_aug_list, get_srh_base_aug, get_srh_aug_list_dino
@@ -41,6 +42,7 @@ from torchvision.transforms import Compose
 from common import (setup_output_dirs, parse_args, get_exp_name,
                            config_loggers, get_optimizer_func,
                            get_scheduler_func, get_dataloaders)
+from models import MLP, resnet_backbone, ContrastiveLearningNetwork, HLSSContrastiveLearningNetwork, CLIPTextClassifier,CLIPVisual
 import yaml
 # from train_hlss import HiDiscSystem
 import wandb
@@ -56,7 +58,7 @@ def get_args_parser():
 
     # Model parameters
     parser.add_argument('--arch', default='vit_small', type=str,
-        choices=['vit_tiny','vit_small', 'vit_base', 'xcit', 'deit_tiny', 'deit_small'] \
+        choices=['vit_tiny','RN50','vit_small', 'vit_base', 'xcit', 'deit_tiny', 'deit_small'] \
                 + torchvision_archs + torch.hub.list("facebookresearch/xcit:main"),
         help="""Name of architecture to train. For quick experiments with ViTs,
         we recommend using vit_tiny or vit_small.""")
@@ -135,7 +137,7 @@ def get_args_parser():
     parser.add_argument('--output_dir', default=".", type=str, help='Path to save logs and checkpoints.')
     parser.add_argument('--saveckp_freq', default=20, type=int, help='Save checkpoint every x epochs.')
     parser.add_argument('--seed', default=0, type=int, help='Random seed.')
-    parser.add_argument('--num_workers', default=10, type=int, help='Number of data loading workers per GPU.')
+    parser.add_argument('--num_workers', default=127, type=int, help='Number of data loading workers per GPU.')
     parser.add_argument("--dist_url", default="env://", type=str, help="""url used to set up
         distributed training; see https://pytorch.org/docs/stable/distributed.html""")
     parser.add_argument("--local_rank", default=0, type=int, help="Please ignore and do not set this argument.")
@@ -156,7 +158,6 @@ def train_dino(args,cf):
         args.local_crops_number,
     )
 
-    
     dataset = HiDiscDINO(
         data_root=cf["data"]["db_root"],
         studies="train",
@@ -201,21 +202,48 @@ def train_dino(args,cf):
         teacher = torchvision_models.__dict__[args.arch]()
         embed_dim = student.fc.weight.shape[1]
     elif args.arch == "RN50":
-        # ckpt_path = "/data1/dri/hidisc/hidisc/exps/Exp007/a/185e5ef3-Dec12-20-58-50-patient_disc_dev_/models/ckpt-epoch39999.ckpt"
+        
         # student = HiDiscSystem.load_from_checkpoint(ckpt_path,
         #                                       cf=cf,
         #                                       num_it_per_ep=0,
         #                                       max_epochs=-1,
         #                                       nc=0,freeze_mlp=True)
-        student = torchvision_models.__dict__[args.arch]()
-        teacher = torchvision_models.__dict__[args.arch]()
-        embed_dim = student.fc.weight.shape[1]
+        student = CLIPVisual(arch=cf["model"]["backbone"])
+        teacher = CLIPVisual(arch=cf["model"]["backbone"])
+
+        checkpoint_path = "/data1/dri/hidisc/hidisc/exps/Exp007/a/185e5ef3-Dec12-20-58-50-patient_disc_dev_/models/ckpt-epoch39999.ckpt"
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        state_dict_CLIPVisual = {}
+        for key in checkpoint['state_dict']:
+            if key.startswith('model.bb'):
+                suffix = key[len('model.bb.'):]
+                state_dict_CLIPVisual[suffix] = checkpoint['state_dict'][key]
+
+        # state_dict_mlp2['layers.0.weight'] = checkpoint['state_dict']['model.proj.layers.0.weight']
+        # state_dict_mlp2['layers.0.bias'] = checkpoint['state_dict']['model.proj.layers.0.bias']
+        
+        student.load_state_dict(state_dict_CLIPVisual)
+        teacher.load_state_dict(state_dict_CLIPVisual)
+        embed_dim = 1024
 
     else:
         print(f"Unknow architecture: {args.arch}")
 
     # multi-crop wrapper handles forward with inputs of different resolutions
-    student = utils.MultiCropWrapper(student, DINOHead(
+    # student = utils.MultiCropWrapper(student, DINOHead(
+    #     embed_dim,
+    #     args.out_dim,
+    #     use_bn=args.use_bn_in_head,
+    #     norm_last_layer=args.norm_last_layer,
+    #     nlayers = 1
+    # ))
+    # teacher = utils.MultiCropWrapper(
+    #     teacher,
+    #     DINOHead(embed_dim, args.out_dim, args.use_bn_in_head, nlayers =1),
+    # )
+        
+
+    student = utils.MultiCropWrapper(student, CLIPTextDINOHead(checkpoint,
         embed_dim,
         args.out_dim,
         use_bn=args.use_bn_in_head,
@@ -224,8 +252,9 @@ def train_dino(args,cf):
     ))
     teacher = utils.MultiCropWrapper(
         teacher,
-        DINOHead(embed_dim, args.out_dim, args.use_bn_in_head, nlayers =1),
+        CLIPTextDINOHead(checkpoint,embed_dim, args.out_dim, args.use_bn_in_head, nlayers =1),
     )
+
     # move networks to gpu
     student, teacher = student.cuda(), teacher.cuda()
     # synchronize batch norms (if any)

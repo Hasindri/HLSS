@@ -322,7 +322,7 @@ def main():
             if (epoch + 1) % 800 == 0:
                 epoch_list_800.append(epoch)
 
-        epoch_list_800 = [epoch for epoch in epoch_list_800 if epoch >= 19200]
+        epoch_list_800 = [epoch for epoch in epoch_list_800 if epoch >= 23200]
 
 
         epoch_list_800.sort()
