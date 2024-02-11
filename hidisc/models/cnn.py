@@ -277,7 +277,6 @@ class CLIPVisual(nn.Module):
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        breakpoint()
 
         x = x.to(self.device)
         x = self.model.encode_image(x, normalize=True)

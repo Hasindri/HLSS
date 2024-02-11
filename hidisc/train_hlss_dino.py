@@ -20,6 +20,7 @@ import math
 import json
 from pathlib import Path
 import copy
+from tqdm import tqdm
 
 import numpy as np
 from PIL import Image
@@ -211,7 +212,7 @@ def train_dino(args,cf):
         student = CLIPVisual(arch=cf["model"]["backbone"])
         teacher = CLIPVisual(arch=cf["model"]["backbone"])
 
-        checkpoint_path = "/data1/dri/hidisc/hidisc/exps/Exp007/a/185e5ef3-Dec12-20-58-50-patient_disc_dev_/models/ckpt-epoch39999.ckpt"
+        checkpoint_path = "/data1/dri/hidisc/hidisc/exps/Exp007/a/185e5ef3-Dec12-20-58-50-patient_disc_dev_/models/ckpt-epoch26399.ckpt"
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
         state_dict_CLIPVisual = {}
         for key in checkpoint['state_dict']:
@@ -248,11 +249,12 @@ def train_dino(args,cf):
         args.out_dim,
         use_bn=args.use_bn_in_head,
         norm_last_layer=args.norm_last_layer,
-        nlayers = 1
+        nlayers = 1,
+        final_layer= False
     ))
     teacher = utils.MultiCropWrapper(
         teacher,
-        CLIPTextDINOHead(checkpoint,embed_dim, args.out_dim, args.use_bn_in_head, nlayers =1),
+        CLIPTextDINOHead(checkpoint,embed_dim, args.out_dim, args.use_bn_in_head, nlayers =1,final_layer= False),
     )
 
     # move networks to gpu
@@ -263,12 +265,12 @@ def train_dino(args,cf):
         teacher = nn.SyncBatchNorm.convert_sync_batchnorm(teacher)
 
         # we need DDP wrapper to have synchro batch norms working...
-        teacher = nn.parallel.DistributedDataParallel(teacher, device_ids=[args.gpu])
+        teacher = nn.parallel.DistributedDataParallel(teacher, device_ids=[args.gpu],find_unused_parameters=True)
         teacher_without_ddp = teacher.module
     else:
         # teacher_without_ddp and teacher are the same thing
         teacher_without_ddp = teacher
-    student = nn.parallel.DistributedDataParallel(student, device_ids=[args.gpu])
+    student = nn.parallel.DistributedDataParallel(student, device_ids=[args.gpu],find_unused_parameters=True)
     # teacher and student start with the same weights
     teacher_without_ddp.load_state_dict(student.module.state_dict())
     # there is no backpropagation through the teacher, so no need for gradients
@@ -338,6 +340,9 @@ def train_dino(args,cf):
         train_stats = train_one_epoch(student, teacher, teacher_without_ddp, dino_loss,
             data_loader, optimizer, lr_schedule, wd_schedule, momentum_schedule,
             epoch, fp16_scaler, args)
+        wandb.log({f"train/sum_loss": train_stats['loss']})
+        wandb.log({f"train/learning_rate": train_stats['lr']})
+        wandb.log({f"train/weight_decay": train_stats['wd']})
 
         # ============ writing logs ... ============
         save_dict = {
@@ -390,13 +395,10 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         
         # teacher and student forward passes + compute dino loss
         with torch.cuda.amp.autocast(fp16_scaler is not None):
-            # teacher_output = teacher(teacher_in)  # only the 2 global views pass through the teacher
-            # breakpoint()
+            teacher_output = teacher(teacher_in)  # only the 2 global views pass through the teacher
             student_output = student(student_in)
-            breakpoint()
             loss = dino_loss(student_output, teacher_output, epoch)
-            breakpoint()
-            wandb.log({f"train/sum_loss": loss})
+            # wandb.log({f"train/sum_loss": loss})
 
 
         if not math.isfinite(loss.item()):
@@ -427,7 +429,10 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         with torch.no_grad():
             m = momentum_schedule[it]  # momentum parameter
             for param_q, param_k in zip(student.module.parameters(), teacher_without_ddp.parameters()):
-                param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
+                    param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
+    
+    
+           
 
         # logging
         torch.cuda.synchronize()

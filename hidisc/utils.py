@@ -470,6 +470,7 @@ def init_distributed_mode(args):
         args.rank = int(os.environ["RANK"])
         args.world_size = int(os.environ['WORLD_SIZE'])
         args.gpu = int(os.environ['LOCAL_RANK'])
+        breakpoint()
     # launched with submitit on a slurm cluster
     elif 'SLURM_PROCID' in os.environ:
         args.rank = int(os.environ['SLURM_PROCID'])
@@ -611,20 +612,15 @@ class MultiCropWrapper(nn.Module):
         # convert to list
         if not isinstance(x, list):
             x = [x]
-
-        if len(x)==8:
-            idx_crops = torch.cumsum(torch.unique_consecutive(
+            
+        idx_crops = torch.cumsum(torch.unique_consecutive(
             torch.tensor([inp.shape[-1] for inp in x]),
             return_counts=True,
         )[1], 0)
 
-        elif len(x)==40:
-            idx_crops = [8,40]
         start_idx, output = 0, torch.empty(0).to(x[0].device)
         for end_idx in idx_crops:
-            breakpoint()
             _out = self.backbone(torch.cat(x[start_idx: end_idx]))
-            breakpoint()
             # The output is a tuple with XCiT model. See:
             # https://github.com/facebookresearch/xcit/blob/master/xcit.py#L404-L405
             if isinstance(_out, tuple):
@@ -632,8 +628,7 @@ class MultiCropWrapper(nn.Module):
             # accumulate outputs
             output = torch.cat((output, _out))
             start_idx = end_idx
-        breakpoint()    
-        # output = self.backbone(torch.cat(x))
+
       
         # Run the head forward on the concatenated features.
         return self.head(output)

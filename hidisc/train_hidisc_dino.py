@@ -19,7 +19,8 @@ import time
 import math
 import json
 from pathlib import Path
-
+import copy
+from tqdm import tqdm
 
 import numpy as np
 from PIL import Image
@@ -167,18 +168,8 @@ def train_dino(args,cf):
         num_patch_samples=cf["data"]["hidisc"]["num_patch_samples"],
         num_transforms=cf["data"]["hidisc"]["num_transforms"])
     
-    # val_dataset = HiDiscDINO(
-    #     data_root=cf["data"]["db_root"],
-    #     studies="val",
-    #     transform=Compose(get_srh_aug_list_dino(cf["data"]["valid_augmentation"])),
-    #     balance_study_per_class=cf["data"]["balance_study_per_class"],
-    #     num_slide_samples=cf["data"]["hidisc"]["num_slide_samples"],
-    #     num_patch_samples=cf["data"]["hidisc"]["num_patch_samples"],
-    #     num_transforms=cf["data"]["hidisc"]["num_transforms"])
-    
     # dataset = datasets.ImageFolder(args.data_path, transform=transform)
     sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
-    # val_sampler = torch.utils.data.DistributedSampler(val_dataset, shuffle=True)
     data_loader = torch.utils.data.DataLoader(
         dataset,
         sampler=sampler,
@@ -187,16 +178,7 @@ def train_dino(args,cf):
         pin_memory=True,
         drop_last=True,
     )
-    # val_data_loader = torch.utils.data.DataLoader(
-    #     val_dataset,
-    #     sampler=val_sampler,
-    #     batch_size=args.batch_size_per_gpu,
-    #     num_workers=args.num_workers,
-    #     pin_memory=True,
-    #     drop_last=True,
-    # )
-    print(f"train data loaded: there are {len(dataset)} images.")
-    # print(f"val data loaded: there are {len(val_dataset)} images.")
+    print(f"Data loaded: there are {len(dataset)} images.")
 
     # ============ building student and teacher networks ... ============
     # we changed the name DeiT-S for ViT-S to avoid confusions
@@ -216,17 +198,30 @@ def train_dino(args,cf):
         teacher = torch.hub.load('facebookresearch/xcit:main', args.arch, pretrained=False)
         embed_dim = student.embed_dim
     # otherwise, we check if the architecture is in torchvision models
-    elif args.arch in torchvision_models.__dict__.keys():
-        student = torchvision_models.__dict__[args.arch]()
-        teacher = torchvision_models.__dict__[args.arch]()
-        embed_dim = student.fc.weight.shape[1]
-    elif args.arch == "RN50":
+    # elif args.arch in torchvision_models.__dict__.keys():
+    #     student = torchvision_models.__dict__[args.arch]()
+    #     teacher = torchvision_models.__dict__[args.arch]()
+    #     embed_dim = student.fc.weight.shape[1]
         
-        # student = HiDiscSystem.load_from_checkpoint(ckpt_path,
-        #                                       cf=cf,
-        #                                       num_it_per_ep=0,
-        #                                       max_epochs=-1,
-        #                                       nc=0,freeze_mlp=True)
+
+    elif args.arch == "resnet50":
+
+        student = resnet_backbone(arch=cf["model"]["backbone"])
+        teacher = resnet_backbone(arch=cf["model"]["backbone"])
+
+        checkpoint_path = "/data1/dri/hidisc/hidisc/datasets/opensrh/hidisc_strongaug/patient/46de6893-Sep26-10-03-35-patient_disc_dev_/models/ckpt-epoch32799.ckpt"
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        state_dict_resnet50 = {}
+        for key in checkpoint['state_dict']:
+            if key.startswith('model.bb'):
+                suffix = key[len('model.bb.'):]
+                state_dict_resnet50[suffix] = checkpoint['state_dict'][key]
+        student.load_state_dict(state_dict_resnet50)
+        teacher.load_state_dict(state_dict_resnet50)
+        embed_dim = 2048
+
+    elif args.arch == "RN50":
+
         student = CLIPVisual(arch=cf["model"]["backbone"])
         teacher = CLIPVisual(arch=cf["model"]["backbone"])
 
@@ -237,9 +232,6 @@ def train_dino(args,cf):
             if key.startswith('model.bb'):
                 suffix = key[len('model.bb.'):]
                 state_dict_CLIPVisual[suffix] = checkpoint['state_dict'][key]
-
-        # state_dict_mlp2['layers.0.weight'] = checkpoint['state_dict']['model.proj.layers.0.weight']
-        # state_dict_mlp2['layers.0.bias'] = checkpoint['state_dict']['model.proj.layers.0.bias']
         
         student.load_state_dict(state_dict_CLIPVisual)
         teacher.load_state_dict(state_dict_CLIPVisual)
@@ -249,16 +241,30 @@ def train_dino(args,cf):
         print(f"Unknow architecture: {args.arch}")
 
     # multi-crop wrapper handles forward with inputs of different resolutions
-    student = utils.MultiCropWrapper(student, DINOHead(
+    # student = utils.MultiCropWrapper(student, DINOHead(
+    #     embed_dim,
+    #     args.out_dim,
+    #     use_bn=args.use_bn_in_head,
+    #     norm_last_layer=args.norm_last_layer,
+    #     nlayers = 1
+    # ))
+    # teacher = utils.MultiCropWrapper(
+    #     teacher,
+    #     DINOHead(embed_dim, args.out_dim, args.use_bn_in_head, nlayers =1),
+    # )
+        
+
+    student = utils.MultiCropWrapper(student, CLIPTextDINOHead(checkpoint,
         embed_dim,
         args.out_dim,
         use_bn=args.use_bn_in_head,
         norm_last_layer=args.norm_last_layer,
-        nlayers = 1
+        nlayers = 1,
+        final_layer=False
     ))
     teacher = utils.MultiCropWrapper(
         teacher,
-        DINOHead(embed_dim, args.out_dim, args.use_bn_in_head, nlayers =1),
+        CLIPTextDINOHead(checkpoint,embed_dim, args.out_dim, args.use_bn_in_head, nlayers =1,final_layer=False),
     )
 
     # move networks to gpu
@@ -269,12 +275,12 @@ def train_dino(args,cf):
         teacher = nn.SyncBatchNorm.convert_sync_batchnorm(teacher)
 
         # we need DDP wrapper to have synchro batch norms working...
-        teacher = nn.parallel.DistributedDataParallel(teacher, device_ids=[args.gpu])
+        teacher = nn.parallel.DistributedDataParallel(teacher, device_ids=[args.gpu],find_unused_parameters=True)
         teacher_without_ddp = teacher.module
     else:
         # teacher_without_ddp and teacher are the same thing
         teacher_without_ddp = teacher
-    student = nn.parallel.DistributedDataParallel(student, device_ids=[args.gpu])
+    student = nn.parallel.DistributedDataParallel(student, device_ids=[args.gpu],find_unused_parameters=True)
     # teacher and student start with the same weights
     teacher_without_ddp.load_state_dict(student.module.state_dict())
     # there is no backpropagation through the teacher, so no need for gradients
@@ -347,9 +353,6 @@ def train_dino(args,cf):
         wandb.log({f"train/sum_loss": train_stats['loss']})
         wandb.log({f"train/learning_rate": train_stats['lr']})
         wandb.log({f"train/weight_decay": train_stats['wd']})
-        # val_one_epoch(student, teacher, teacher_without_ddp, dino_loss, val_data_loader,
-        #             optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
-        #             fp16_scaler, args)
 
         # ============ writing logs ... ============
         save_dict = {
@@ -396,7 +399,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             teacher_in.append(t_in[i].squeeze(dim=1))
 
         s_in = torch.chunk(images[1], chunks=32, dim=1)
-        student_in = teacher_in.copy()
+        student_in = copy.copy(teacher_in)
         for i in range (len(s_in)):
             student_in.append(s_in[i].squeeze(dim=1))
         
@@ -436,7 +439,10 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         with torch.no_grad():
             m = momentum_schedule[it]  # momentum parameter
             for param_q, param_k in zip(student.module.parameters(), teacher_without_ddp.parameters()):
-                param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
+                    param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
+    
+    
+           
 
         # logging
         torch.cuda.synchronize()
@@ -447,32 +453,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-
-
-def val_one_epoch(student, teacher, teacher_without_ddp, dino_loss, val_data_loader,
-                    optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
-                    fp16_scaler, args):
-   
-    for it, (images, _) in enumerate(val_data_loader):
-
-        # move images to gpu
-        images = [im.cuda(non_blocking=True) for im in images]
-        t_in = torch.chunk(images[0], chunks=8, dim=1)
-        teacher_in =[]
-        for i in range (len(t_in)):
-            teacher_in.append(t_in[i].squeeze(dim=1))
-
-        s_in = torch.chunk(images[1], chunks=32, dim=1)
-        student_in = teacher_in.copy()
-        for i in range (len(s_in)):
-            student_in.append(s_in[i].squeeze(dim=1))
-        
-        # teacher and student forward passes + compute dino loss
-        with torch.cuda.amp.autocast(fp16_scaler is not None):
-            teacher_output = teacher(teacher_in)  # only the 2 global views pass through the teacher
-            student_output = student(student_in)
-            loss = dino_loss(student_output, teacher_output, epoch)
-            wandb.log({f"val/sum_loss": loss})
 
 
 class DINOLoss(nn.Module):
