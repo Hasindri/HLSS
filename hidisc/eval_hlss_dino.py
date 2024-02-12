@@ -17,32 +17,32 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import confusion_matrix
 from tqdm import tqdm
-import torch.distributed as dist
-import torch
-from torchvision.transforms import Compose
-import torch.nn as nn
 
-import pytorch_lightning as pl
+import torch
+import torch.nn as nn
+from torchvision.transforms import Compose
 from torchmetrics import AveragePrecision, Accuracy
 from torchvision import models as torchvision_models
+import torch.distributed as dist
+import pytorch_lightning as pl
 
 from datasets.srh_dataset import OpenSRHDataset
-from datasets.improc import get_srh_base_aug, get_srh_vit_base_aug
+from datasets.improc import get_srh_base_aug, get_srh_vit_base_aug,get_srh_base_aug_hidisc
 from common import (parse_args, get_exp_name, config_loggers,
                            get_num_worker)
-# from train_hlss import HiDiscSystem
-# from train_hlss_patchtxt import HiDiscSystem
-from train_hlss_granular import HiDiscSystem
+
 from models import MLP, resnet_backbone, ContrastiveLearningNetwork, HLSSContrastiveLearningNetwork, CLIPTextClassifier,CLIPVisual
 import utils
 import vision_transformer as vits
 from vision_transformer import DINOHead, CLIPTextDINOHead
 
+import warnings
+warnings.filterwarnings("ignore")
+
 import wandb
 
 wandb.init(project="HLSS")
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(torchvision_models.__dict__[name]))
@@ -51,7 +51,7 @@ def get_args_parser():
     parser = argparse.ArgumentParser('DINO', add_help=False)
 
     # Model parameters
-    parser.add_argument('--arch', default='vit_small', type=str,
+    parser.add_argument('--arch', default='resnet50', type=str,
         choices=['vit_tiny','RN50','vit_small', 'vit_base', 'xcit', 'deit_tiny', 'deit_small'] \
                 + torchvision_archs + torch.hub.list("facebookresearch/xcit:main"),
         help="""Name of architecture to train. For quick experiments with ViTs,
@@ -59,9 +59,9 @@ def get_args_parser():
     parser.add_argument('--out_dim', default=128, type=int, help="""Dimensionality of
         the DINO head output. For complex and large datasets large values (like 65k) work well.""")
     # Misc
-    parser.add_argument('--data_path', default='/path/to/imagenet/train/', type=str,
+    parser.add_argument('--data_path', default='/data1/dri/hidisc/hidisc/datasets/opensrh', type=str,
         help='Please specify path to the ImageNet training data.')
-    parser.add_argument('--output_dir', default=".", type=str, help='Path to save logs and checkpoints.')
+    parser.add_argument('--output_dir', default="/data1/dri/hidisc/hidisc/exps/Exp018/b", type=str, help='Path to save logs and checkpoints.')
     parser.add_argument('--seed', default=0, type=int, help='Random seed.')
     parser.add_argument('--num_workers', default=10, type=int, help='Number of data loading workers per GPU.')
     parser.add_argument("--dist_url", default="env://", type=str, help="""url used to set up
@@ -110,79 +110,82 @@ def knn_predict(feature, feature_bank, feature_labels, classes: int,
     return pred_labels, pred_scores
 
 
-def get_embeddings(args, cf: Dict[str, Any],ckpt:str,
+def get_embeddings(cf: Dict[str, Any],ckpt:str,
                    exp_root: str,train_loader,val_loader) -> Dict[str, Union[torch.Tensor, List[str]]]:
     """Run forward pass on the dataset, and generate embeddings and logits"""
 
-    student = CLIPVisual(arch=cf["model"]["backbone"])
-    embed_dim = 1024
-
-    student = utils.MultiCropWrapper(student, DINOHead(
-        embed_dim,
-        cf["model"]["out_dim"],
-        nlayers = 1,
-        final_layer=False
-    ))
-
+    if cf["model"]["backbone"] == "RN50":
+        student = CLIPVisual(arch=cf["model"]["backbone"])
+        embed_dim = 1024
+    elif cf["model"]["backbone"] == "resnet50":
+        student = resnet_backbone(arch=cf["model"]["backbone"])
+        embed_dim = 2048
+    
+    # student = utils.MultiCropWrapper(student, DINOHead(
+    #     embed_dim,
+    #     cf["model"]["out_dim"],
+    #     nlayers = 1,
+    #     final_layer=False
+    # ))
     ckpt_path = os.path.join(cf["infra"]["log_dir"], cf["infra"]["exp_name"],
                              cf["eval"]["ckpt_dir"],ckpt)
     ckpt = torch.load(ckpt_path, map_location="cpu")
-
     state_dict = {}
     for key in ckpt['student']:
-        if key.startswith('module'):
-                suffix = key[len('module.'):]
+        if key.startswith('module.backbone'):
+                suffix = key[len('module.backbone.'):]
                 state_dict[suffix] = ckpt['student'][key]
-    keys_to_remove = ["head.last_layer.weight_g", "head.last_layer.weight_v"]
-    for key in keys_to_remove:
-        state_dict.pop(key, None)
-
+    # keys_to_remove = ["head.last_layer.weight_g", "head.last_layer.weight_v"]
+    # for key in keys_to_remove:
+    #     state_dict.pop(key, None)
     student.load_state_dict(state_dict)
-    student = student.cuda()
-    print(f'gpu {args.gpu}')
-    student = nn.parallel.DistributedDataParallel(student, device_ids=[args.gpu],find_unused_parameters=True)
-    breakpoint()
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    student = student.to(device)
     student.eval()
 
     train_predictions = {"path": [],"label": [],"embeddings": []}
     val_predictions = {"path": [],"label": [],"embeddings": []}
 
-
-    for i,batch in enumerate(train_loader):
-        assert len(batch["image"].shape) == 4
-        images = [batch["image"].cuda(non_blocking=True)]
-        out = student(images)
+    for i,batch in enumerate(tqdm(train_loader,total=len(train_loader))):
+        # assert len(batch["image"].shape) == 4
+        images = batch["image"].to(device)
+        labels = batch["label"].to(device)
+        with torch.no_grad():
+            out = student(images)
         train_predictions["path"].extend(batch["path"])  
-        train_predictions["label"].append(batch["label"])
+        train_predictions["label"].append(labels)
         train_predictions["embeddings"].append(out)
     train_predictions["label"] = torch.cat(train_predictions["label"], dim=0)
     train_predictions["embeddings"] = torch.cat(train_predictions["embeddings"], dim=0)
-    breakpoint()
+    train_predictions["path"]  = [item for sublist in train_predictions["path"] for item in sublist]
 
-    for i,batch in enumerate(val_loader):
-        assert len(batch["image"].shape) == 4
-        images = [batch["image"].cuda(non_blocking=True)]
-        out = student(images)
+    for i,batch in enumerate(tqdm(val_loader,total=len(val_loader))):
+        # assert len(batch["image"].shape) == 4
+        images = batch["image"].to(device)
+        labels = batch["label"].to(device)
+        with torch.no_grad():
+            out = student(images)
         val_predictions["path"].extend(batch["path"])  
-        val_predictions["label"].append(batch["label"])
+        val_predictions["label"].append(labels)
         val_predictions["embeddings"].append(out)
     val_predictions["label"] = torch.cat(val_predictions["label"], dim=0)
     val_predictions["embeddings"] = torch.cat(val_predictions["embeddings"], dim=0)
-    breakpoint()
+    val_predictions["path"]  = [item for sublist in val_predictions["path"] for item in sublist]
 
     del student
 
-    def process_predictions(predictions):
-        pred = {}
-        for k in predictions[0].keys():
-            if k == "path":
-                pred[k] = [pk for p in predictions for pk in p[k][0]]
-            else:
-                pred[k] = torch.cat([p[k] for p in predictions])
-        return pred
+    # def process_predictions(predictions):
+    #     pred = {}
+    #     for k in predictions[0].keys():
+    #         if k == "path":
+    #             pred[k] = [pk for p in predictions for pk in p[k][0]]
+    #         else:
+    #             pred[k] = torch.cat([p[k] for p in predictions])
+    #     return pred
 
-    train_predictions = process_predictions(train_predictions)
-    val_predictions = process_predictions(val_predictions)
+    # train_predictions = process_predictions(train_predictions)
+    # val_predictions = process_predictions(val_predictions)
 
     train_embs = torch.nn.functional.normalize(train_predictions["embeddings"],
                                                p=2,
@@ -279,7 +282,7 @@ def make_specs(epoch_no, predictions: Dict[str, Union[torch.Tensor, List[str]]])
     wandb.log({f"eval_knn/slide_mca": get_all_metrics(slides_logits, slides_label)[1]})
     wandb.log({f"eval_knn/patient_mca": get_all_metrics(patient_logits,patient_label)[1]})
 
-    csv_filename = "exp16a_eval.csv"
+    csv_filename = "exp18b_eval.csv"
     
     with open(csv_filename, mode='a', newline='') as file:
         writer = csv.writer(file)
@@ -323,19 +326,21 @@ def setup_eval_paths(cf, get_exp_name, cmt_append):
 
 def main():
     """Driver script for evaluation pipeline."""
-    parser = get_args_parser()
-    args = parser.parse_args()
-    with open(args.config, 'r') as file:
-        cf = yaml.load(file, Loader=yaml.FullLoader)
+    cf_fd = parse_args()
+    cf = yaml.load(cf_fd, Loader=yaml.FullLoader)
     exp_root, pred_dir, cp_config, pred_fname = setup_eval_paths(
         cf, get_exp_name, "")
     pl.seed_everything(cf["infra"]["seed"])
-    utils.init_distributed_mode(args)
-    breakpoint()
+
+    # logging and copying config files
+    cp_config(cf_fd.name)
+    config_loggers(exp_root)
 
     #create dataset
     if cf["model"]["backbone"] == "RN50":
         aug_func = get_srh_base_aug
+    elif cf["model"]["backbone"] == "resnet50":
+        aug_func = get_srh_base_aug_hidisc
     elif cf["model"]["backbone"] == "vit":
         aug_func = get_srh_vit_base_aug
     else:
@@ -347,64 +352,37 @@ def main():
                                 transform=Compose(aug_func()),
                                 balance_patch_per_class=False)
     train_dset.reset_index()
-     
-    sampler = torch.utils.data.DistributedSampler(train_dset, shuffle=True)
     train_loader = torch.utils.data.DataLoader(
         train_dset,
-        sampler=sampler,
         batch_size=cf["eval"]["predict_batch_size"],
-        num_workers=get_num_worker(),
+        drop_last=False,
         pin_memory=True,
-        drop_last=True,
-    )
-
-
-    # train_loader = torch.utils.data.DataLoader(
-    #     train_dset,
-    #     batch_size=cf["eval"]["predict_batch_size"],
-    #     drop_last=False,
-    #     pin_memory=True,
-    #     num_workers=get_num_worker(),
-    #     persistent_workers=True)
+        num_workers=get_num_worker(),
+        persistent_workers=True)
 
     val_dset = OpenSRHDataset(data_root=cf["data"]["db_root"],
                               studies="val",
                               transform=Compose(aug_func()),
                               balance_patch_per_class=False)
     val_dset.reset_index()
-
-    vsampler = torch.utils.data.DistributedSampler(val_dset, shuffle=True)
     val_loader = torch.utils.data.DataLoader(
         val_dset,
-        sampler=vsampler,
         batch_size=cf["eval"]["predict_batch_size"],
-        num_workers=get_num_worker(),
+        drop_last=False,
         pin_memory=True,
-        drop_last=True,
-    )
-
-
-    # val_loader = torch.utils.data.DataLoader(
-    #     val_dset,
-    #     batch_size=cf["eval"]["predict_batch_size"],
-    #     drop_last=False,
-    #     pin_memory=True,
-    #     num_workers=get_num_worker(),
-    #     persistent_workers=True)
+        num_workers=get_num_worker(),
+        persistent_workers=True)
 
     # get predictions
     if not cf["eval"].get("eval_predictions", None):
         logging.info("generating predictions")
         ckpt_list_old = os.listdir(os.path.join(cf["infra"]["log_dir"], cf["infra"]["exp_name"],
                              cf["eval"]["ckpt_dir"]))
+        ckpt_list = ['checkpoint0040.pth','checkpoint0080.pth','checkpoint0120.pth',
+                     'checkpoint0160.pth','checkpoint0200.pth','checkpoint0240.pth',
+                     'checkpoint0280.pth']
+        # ckpt_list = ['checkpoint0280.pth']
         
-        ckpt_list = []
-        for i in range(len(ckpt_list_old)):
-            if ckpt_list_old[i].endswith(".pth"):
-                ckpt_list.append(ckpt_list_old[i])
-
-        breakpoint()
-
         csv_filename = "exp18b_eval.csv"
         try:
             df = pd.read_csv(csv_filename)
@@ -418,12 +396,11 @@ def main():
             epoch_str = ckpt_list[epoch].split("checkpoint")[1].split(".")[0]
             epoch_no = int(epoch_str)
             print(f'ckpt {ckpt}')
-            predictions = get_embeddings(args, cf,ckpt, exp_root,train_loader,val_loader)
-            predpath = (ckpt.split(".")[0]).split("-")[1]
+            predictions = get_embeddings(cf,ckpt, exp_root,train_loader,val_loader)
+            predpath = (ckpt.split(".")[0])
 
             torch.save(predictions, os.path.join(pred_dir, f"predictions_{predpath}.pt"))
             make_specs(epoch_no,predictions)
-            # breakpoint()
 
             
     else:

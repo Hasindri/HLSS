@@ -30,3 +30,4 @@ epoch,patch,slide,patient
 23199,tensor(0.8284),tensor(0.8755),tensor(0.8500)
 23999,tensor(0.8280),tensor(0.8755),tensor(0.8667)
 24799,tensor(0.8275),tensor(0.8716),tensor(0.8667)
+
