@@ -172,7 +172,7 @@ def get_num_worker():
         num_worker = len(os.sched_getaffinity(0))
     except Exception:
         num_worker = os.cpu_count()
-
+    return 2 
     if num_worker > 1:
         return num_worker - 1
     else:

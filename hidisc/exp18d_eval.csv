@@ -1,0 +1,10 @@
+epoch,patch,slide,patient
+before,tensor(0.8190),tensor(0.8911),tensor(0.9000)
+0,tensor(0.3506),tensor(0.3813),tensor(0.3667)
+40,tensor(0.3214),tensor(0.3502),tensor(0.3167)
+80,tensor(0.3403),tensor(0.3463),tensor(0.3333)
+120,tensor(0.3177),tensor(0.3152),tensor(0.3000)
+160,tensor(0.3263),tensor(0.3268),tensor(0.3000)
+200,tensor(0.3178),tensor(0.3230),tensor(0.3167)
+240,tensor(0.3138),tensor(0.3268),tensor(0.3167)
+280,tensor(0.3190),tensor(0.3113),tensor(0.3000)

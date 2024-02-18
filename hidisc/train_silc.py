@@ -168,7 +168,6 @@ def train_dino(args,cf):
         num_patch_samples=cf["data"]["hidisc"]["num_patch_samples"],
         num_transforms=cf["data"]["hidisc"]["num_transforms"])
     
-    
     # dataset = datasets.ImageFolder(args.data_path, transform=transform)
     sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
     data_loader = torch.utils.data.DataLoader(
@@ -229,7 +228,20 @@ def train_dino(args,cf):
         print(f"Unknow architecture: {args.arch}")
 
     # multi-crop wrapper handles forward with inputs of different resolutions
-    student = utils.MultiCropWrapper(student, DINOHead(
+    # student = utils.MultiCropWrapper(student, DINOHead(
+    #     embed_dim,
+    #     args.out_dim,
+    #     use_bn=args.use_bn_in_head,
+    #     norm_last_layer=args.norm_last_layer,
+    #     nlayers = 1
+    # ))
+    # teacher = utils.MultiCropWrapper(
+    #     teacher,
+    #     DINOHead(embed_dim, args.out_dim, args.use_bn_in_head, nlayers =1),
+    # )
+        
+
+    student = utils.MultiCropWrapper(student, CLIPTextDINOHead(checkpoint,
         embed_dim,
         args.out_dim,
         use_bn=args.use_bn_in_head,
@@ -239,31 +251,8 @@ def train_dino(args,cf):
     ))
     teacher = utils.MultiCropWrapper(
         teacher,
-        DINOHead(embed_dim, args.out_dim, args.use_bn_in_head, nlayers =1,final_layer= False),
+        CLIPTextDINOHead(checkpoint,embed_dim, args.out_dim, args.use_bn_in_head, nlayers =1,final_layer= False),
     )
-        
-
-    # student = utils.MultiCropWrapper(student, CLIPTextDINOHead(checkpoint,
-    #     embed_dim,
-    #     args.out_dim,
-    #     use_bn=args.use_bn_in_head,
-    #     norm_last_layer=args.norm_last_layer,
-    #     nlayers = 1,
-    #     final_layer= False
-    # ))
-    # teacher = utils.MultiCropWrapper(
-    #     teacher,
-    #     CLIPTextDINOHead(checkpoint,embed_dim, args.out_dim, args.use_bn_in_head, nlayers =1,final_layer= False),
-    # )
-
-    state_dict_CLIPText = {}
-    state_dict_CLIPText['mlp.weight'] = checkpoint['state_dict']['model.proj.layers.0.weight']
-    state_dict_CLIPText['mlp.bias'] = checkpoint['state_dict']['model.proj.layers.0.bias']
-    msg = student.head.load_state_dict(state_dict_CLIPText)
-    print('loading Text projection weights')
-    print(msg)
-
-    breakpoint()
 
     # move networks to gpu
     student, teacher = student.cuda(), teacher.cuda()
@@ -328,15 +317,15 @@ def train_dino(args,cf):
 
     # ============ optionally resume training ... ============
     to_restore = {"epoch": 0}
-    utils.restart_from_checkpoint(
-        os.path.join(args.output_dir, "checkpoint.pth"),
-        run_variables=to_restore,
-        student=student,
-        teacher=teacher,
-        optimizer=optimizer,
-        fp16_scaler=fp16_scaler,
-        dino_loss=dino_loss,
-    )
+    # utils.restart_from_checkpoint(
+    #     os.path.join(args.output_dir, "checkpoint.pth"),
+    #     run_variables=to_restore,
+    #     student=student,
+    #     teacher=teacher,
+    #     optimizer=optimizer,
+    #     fp16_scaler=fp16_scaler,
+    #     dino_loss=dino_loss,
+    # )
     start_epoch = to_restore["epoch"]
 
     save_dict = {
@@ -350,6 +339,7 @@ def train_dino(args,cf):
     if fp16_scaler is not None:
             save_dict['fp16_scaler'] = fp16_scaler.state_dict()
     utils.save_on_master(save_dict, os.path.join(args.output_dir, 'checkpointzero.pth'))
+    breakpoint()
 
     start_time = time.time()
     print("Starting DINO training !")

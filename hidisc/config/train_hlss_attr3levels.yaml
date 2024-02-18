@@ -1,5 +1,5 @@
 infra:
-    log_dir: /data1/dri/hidisc/hidisc/exps/Exp016 # where all the experiments are
+    log_dir: /data1/dri/hidisc/hidisc/exps/Exp020 # where all the experiments are
     exp_name: a # create a subdirectory for each set of experiments
     comment: patient_disc_dev # can use this to customize for each experiment
     seed: 1000

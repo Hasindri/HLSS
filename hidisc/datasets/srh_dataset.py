@@ -623,7 +623,7 @@ class HiDiscDINO(HiDiscDataset):
         globalcrop = torch.stack([global1,global2],dim=0)
         globalcrop = globalcrop.view(8, 3, 224, 224)
 
-        #localcrops
+        # #localcrops
         patches1 = torch.stack([x for x in slide1[2]],dim=0)
         patches2 = torch.stack([x for x in slide1[3]],dim=0)
         patches3 = torch.stack([x for x in slide1[4]],dim=0)
@@ -649,6 +649,10 @@ class HiDiscDINO(HiDiscDataset):
         localcrop = torch.stack([local1,local2],dim=0)
         localcrop = localcrop.view(32, 3, 96, 96)
         # localcrop = localcrop.view(32, 3, 224, 224)
+
+        #to consider only patch level crops
+        # globalcrop = torch.stack([allcrops[0][i][0] for i in range(0,2)],dim=0)
+        # localcrop = torch.stack([allcrops[0][i][0] for i in range(2,10)],dim=0)
 
         return ([globalcrop,localcrop],target)
 

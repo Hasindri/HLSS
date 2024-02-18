@@ -314,3 +314,74 @@ class HLSSGranularNetwork(torch.nn.Module):
 
 
         return proj_out_norm1.unsqueeze(1), proj_out_norm2.unsqueeze(1), proj_out_norm3.unsqueeze(1)
+    
+
+class HLSSKL(torch.nn.Module):
+    """A network consists of a backbone and 2 projection heads.
+
+    Forward pass returns the normalized embeddings after a projection layer.
+    """
+
+    def __init__(self, backbone: callable, proj1: callable, proj2: callable, proj3: callable):
+        super(HLSSKL, self).__init__()
+        self.bb = backbone()
+        self.proj1 = proj1()
+        self.proj2 = proj2()
+        self.proj3 = proj3()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        bb_out = self.bb(x)
+
+        #CLIPTextClassifier patch
+        proj_out1 = self.proj1(bb_out)
+        #CLIPTextClassifier slide
+        proj_out2 = self.proj2(bb_out)
+        #CLIPTextClassifier patient
+        proj_out3 = self.proj3(bb_out)
+
+        bb_out_norm = torch.nn.functional.normalize(bb_out, p=2.0, dim=1)
+        proj_out_norm1 = torch.nn.functional.normalize(proj_out1, p=2.0, dim=1)
+        proj_out_norm2 = torch.nn.functional.normalize(proj_out2, p=2.0, dim=1)
+        proj_out_norm3 = torch.nn.functional.normalize(proj_out3, p=2.0, dim=1)
+ 
+
+
+        return bb_out_norm.unsqueeze(1),proj_out_norm1.unsqueeze(1), proj_out_norm2.unsqueeze(1), proj_out_norm3.unsqueeze(1)
+    
+
+class VisGranularNetwork(torch.nn.Module):
+    """A network consists of a backbone and 2 projection heads.
+
+    Forward pass returns the normalized embeddings after a projection layer.
+    """
+
+    def __init__(self, backbone: callable, mlp: callable,  proj1: callable, proj2: callable, proj3: callable):
+        super(VisGranularNetwork, self).__init__()
+        self.visualbb = backbone()
+        self.textbb = backbone()
+        self.mlp = mlp()
+        self.proj1 = proj1()
+        self.proj2 = proj2()
+        self.proj3 = proj3()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        vis_out = self.visualbb(x)
+        txt_out = self.textbb(x)
+
+        #MLP
+        mlp_out = self.mlp(vis_out)
+        #CLIPTextClassifier patch
+        proj_out1 = self.proj1(txt_out)
+        #CLIPTextClassifier slide
+        proj_out2 = self.proj2(txt_out)
+        #CLIPTextClassifier patient
+        proj_out3 = self.proj3(txt_out)
+
+        mlp_out_norm = torch.nn.functional.normalize(mlp_out, p=2.0, dim=1)
+        proj_out_norm1 = torch.nn.functional.normalize(proj_out1, p=2.0, dim=1)
+        proj_out_norm2 = torch.nn.functional.normalize(proj_out2, p=2.0, dim=1)
+        proj_out_norm3 = torch.nn.functional.normalize(proj_out3, p=2.0, dim=1)
+ 
+
+
+        return mlp_out_norm.unsqueeze(1), proj_out_norm1.unsqueeze(1), proj_out_norm2.unsqueeze(1), proj_out_norm3.unsqueeze(1)

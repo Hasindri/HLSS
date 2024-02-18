@@ -219,7 +219,7 @@ def get_embeddings(cf: Dict[str, Any],ckpt:str,
     return val_predictions
 
 
-def make_specs(epoch_no, predictions: Dict[str, Union[torch.Tensor, List[str]]]) -> None:
+def make_specs(cf,epoch_no, predictions: Dict[str, Union[torch.Tensor, List[str]]]) -> None:
     """Compute all specs for an experiment"""
 
     # aggregate prediction into a dataframe
@@ -282,7 +282,7 @@ def make_specs(epoch_no, predictions: Dict[str, Union[torch.Tensor, List[str]]])
     wandb.log({f"eval_knn/slide_mca": get_all_metrics(slides_logits, slides_label)[1]})
     wandb.log({f"eval_knn/patient_mca": get_all_metrics(patient_logits,patient_label)[1]})
 
-    csv_filename = "exp18b_eval.csv"
+    csv_filename = cf["infra"]["csv_filename"]
     
     with open(csv_filename, mode='a', newline='') as file:
         writer = csv.writer(file)
@@ -376,14 +376,14 @@ def main():
     # get predictions
     if not cf["eval"].get("eval_predictions", None):
         logging.info("generating predictions")
-        ckpt_list_old = os.listdir(os.path.join(cf["infra"]["log_dir"], cf["infra"]["exp_name"],
-                             cf["eval"]["ckpt_dir"]))
-        ckpt_list = ['checkpoint0040.pth','checkpoint0080.pth','checkpoint0120.pth',
-                     'checkpoint0160.pth','checkpoint0200.pth','checkpoint0240.pth',
+        # ckpt_list_old = os.listdir(os.path.join(cf["infra"]["log_dir"], cf["infra"]["exp_name"],
+        #                      cf["eval"]["ckpt_dir"]))
+        ckpt_list = ['checkpoint0000.pth','checkpoint0020.pth','checkpoint0040.pth','checkpoint0060.pth','checkpoint0080.pth','checkpoint0100.pth','checkpoint0120.pth',
+                     'checkpoint0140.pth','checkpoint0160.pth','checkpoint0180.pth','checkpoint0200.pth','checkpoint0220.pth','checkpoint0240.pth','checkpoint0260.pth',
                      'checkpoint0280.pth']
-        # ckpt_list = ['checkpoint0280.pth']
+        # ckpt_list = ['checkpointzero.pth']
         
-        csv_filename = "exp18b_eval.csv"
+        csv_filename = cf["infra"]["csv_filename"]
         try:
             df = pd.read_csv(csv_filename)
             
@@ -400,7 +400,7 @@ def main():
             predpath = (ckpt.split(".")[0])
 
             torch.save(predictions, os.path.join(pred_dir, f"predictions_{predpath}.pt"))
-            make_specs(epoch_no,predictions)
+            make_specs(cf,epoch_no,predictions)
 
             
     else:

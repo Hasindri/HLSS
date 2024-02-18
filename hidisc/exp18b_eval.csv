@@ -1,2 +1,10 @@
 epoch,patch,slide,patient
+0,tensor(0.3504),tensor(0.3852),tensor(0.3500)
+40,tensor(0.2750),tensor(0.2062),tensor(0.1667)
+80,tensor(0.2821),tensor(0.2296),tensor(0.2167)
+120,tensor(0.2823),tensor(0.2529),tensor(0.2167)
+160,tensor(0.2667),tensor(0.2140),tensor(0.1667)
+200,tensor(0.2937),tensor(0.2724),tensor(0.2500)
+240,tensor(0.3233),tensor(0.3191),tensor(0.3000)
+280,tensor(0.3020),tensor(0.2763),tensor(0.2500)
 

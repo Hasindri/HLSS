@@ -1,6 +1,6 @@
 import torch
 print(torch.__version__)
-
+import torch.nn.functional as F
 import tifffile
 
 import os
@@ -193,10 +193,10 @@ warnings.filterwarnings("ignore")
 # # print (f'args {cf_fd}')
 # cf = yaml.load(cf_fd, Loader=yaml.FullLoader)
 
-# # print(f'cf {len(cf["model"]["templates"])}')
+# print(f'cf {len(cf["model"]["templates"])}')
 
-# # l = list(cf["model"]["templates"].keys())
-
+# l = list(cf["model"]["templates"].keys())
+# breakpoint()
 
 # print(len(cf["model"]["patient_templates"].keys()))
 # print(len(cf["data"]["patient"]))
@@ -212,72 +212,88 @@ warnings.filterwarnings("ignore")
 # ------------------------------------------------------------------------------
 
 #DINO
-import argparse
-import os
-import sys
-import datetime
-import time
-import math
-import json
-from pathlib import Path
+# import argparse
+# import os
+# import sys
+# import datetime
+# import time
+# import math
+# import json
+# from pathlib import Path
 
-import numpy as np
-from PIL import Image
-import torch
-import torch.nn as nn
-import torch.distributed as dist
-import torch.backends.cudnn as cudnn
-import torch.nn.functional as F
-from torchvision import datasets, transforms
-from torchvision import models as torchvision_models
+# import numpy as np
+# from PIL import Image
+# import torch
+# import torch.nn as nn
+# import torch.distributed as dist
+# import torch.backends.cudnn as cudnn
+# import torch.nn.functional as F
+# from torchvision import datasets, transforms
+# from torchvision import models as torchvision_models
 
-import utils
-import vision_transformer as vits
-from vision_transformer import DINOHead
+# import utils
+# import vision_transformer as vits
+# from vision_transformer import DINOHead
 
-torchvision_archs = sorted(name for name in torchvision_models.__dict__
-    if name.islower() and not name.startswith("__")
-    and callable(torchvision_models.__dict__[name]))
+# torchvision_archs = sorted(name for name in torchvision_models.__dict__
+#     if name.islower() and not name.startswith("__")
+#     and callable(torchvision_models.__dict__[name]))
 
-dataset = datasets.ImageFolder("/data1/dri/hidisc/hidisc/datasets/opensrh/train")
-data_loader = torch.utils.data.DataLoader(
-        dataset,
-        batch_size=1,
-        num_workers=1,
-        pin_memory=True,
-        drop_last=True,
-    )
-print(f"Data loaded: there are {len(dataset)} images.")
+# dataset = datasets.ImageFolder("/data1/dri/hidisc/hidisc/datasets/opensrh/train")
+# data_loader = torch.utils.data.DataLoader(
+#         dataset,
+#         batch_size=1,
+#         num_workers=1,
+#         pin_memory=True,
+#         drop_last=True,
+#     )
+# print(f"Data loaded: there are {len(dataset)} images.")
 
 
-student = torchvision_models.__dict__['resnet50']()
-teacher = torchvision_models.__dict__['resnet50']()
-embed_dim = student.fc.weight.shape[1]
+# student = torchvision_models.__dict__['resnet50']()
+# teacher = torchvision_models.__dict__['resnet50']()
+# embed_dim = student.fc.weight.shape[1]
+
+# breakpoint()
+
+# head =  DINOHead(
+#         embed_dim,
+#         65536,
+#         use_bn=False,
+#         norm_last_layer=True,
+#     )
+# x = torch.rand((2048))
+# y = head(x)
+# breakpoint()
+
+# student = utils.MultiCropWrapper(student, DINOHead(
+#         embed_dim,
+#         65536,
+#         use_bn=False,
+#         norm_last_layer=True,
+#     ))
+# teacher = utils.MultiCropWrapper(
+#         teacher,
+#         DINOHead(embed_dim, 65536, False),
+#     )
+
+# breakpoint()
+
+# ---------------------------------------------------------
+input1 = torch.eye(100, 128)
+input2 = torch.zeros(1, 128)
+output = F.cosine_similarity(input1, input2)
+
+
+x = torch.rand((256,1,1024))
+y = torch.rand((1,128,1024))
+z = F.cosine_similarity(x, y, dim=-1)
+m = torch.argmax(z, dim=-1)
+patch = torch.zeros((256,1024))
+print(patch.shape)
+for i,ind in enumerate(m):
+
+    patch[i] = y[0,ind]
+
 
 breakpoint()
-
-head =  DINOHead(
-        embed_dim,
-        65536,
-        use_bn=False,
-        norm_last_layer=True,
-    )
-x = torch.rand((2048))
-y = head(x)
-breakpoint()
-
-student = utils.MultiCropWrapper(student, DINOHead(
-        embed_dim,
-        65536,
-        use_bn=False,
-        norm_last_layer=True,
-    ))
-teacher = utils.MultiCropWrapper(
-        teacher,
-        DINOHead(embed_dim, 65536, False),
-    )
-
-breakpoint()
-
-
-

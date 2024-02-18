@@ -1,8 +1,9 @@
 infra:
     log_dir: /data1/dri/hidisc/hidisc/exps/Exp018 # where all the experiments are
-    exp_name: b # use the same name as the training experiment
+    exp_name: f # use the same name as the training experiment
     comment: patient_disc_dev # can use this to customize for each experiment
     seed: 1000
+    csv_filename: "exp18f_eval.csv"
 model:
     backbone: RN50
     mlp_hidden: []

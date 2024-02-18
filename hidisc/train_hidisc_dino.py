@@ -342,6 +342,19 @@ def train_dino(args,cf):
     start_epoch = to_restore["epoch"]
 
     start_time = time.time()
+
+    save_dict = {
+            'student': student.state_dict(),
+            'teacher': teacher.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'epoch': epoch + 1,
+            'args': args,
+            'dino_loss': dino_loss.state_dict(),
+        }
+    if fp16_scaler is not None:
+        save_dict['fp16_scaler'] = fp16_scaler.state_dict()
+    utils.save_on_master(save_dict, os.path.join(args.output_dir, 'checkpointzero.pth'))
+    
     print("Starting DINO training !")
     for epoch in range(start_epoch, args.epochs):
         data_loader.sampler.set_epoch(epoch)

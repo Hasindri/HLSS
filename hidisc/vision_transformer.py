@@ -302,7 +302,9 @@ class CLIPTextDINOHead(nn.Module):
             state_dict_CLIPText = {}
             state_dict_CLIPText['weight'] = checkpoint['state_dict']['model.proj.layers.0.weight']
             state_dict_CLIPText['bias'] = checkpoint['state_dict']['model.proj.layers.0.bias']
-            self.mlp.load_state_dict(state_dict_CLIPText)
+            msg = self.mlp.load_state_dict(state_dict_CLIPText)
+            print('loading Text projection weights')
+            print(msg)
 
         else:
             layers = [nn.Linear(in_dim, hidden_dim)]
