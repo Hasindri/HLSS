@@ -5,7 +5,7 @@ export WANDB_NOTES="train_hlss_granular setup + enforcing KL div loss between vi
 export WANDB_RUN_GROUP="Exp020"
 # export WANDB_RUN_ID="w8bbvbnl"
 
-# wandb on 
-wandb disabled 
+wandb on 
+# wandb disabled 
 
 python train_hlss_KL.py -c=config/train_hlss_attr3levels.yaml

@@ -147,6 +147,8 @@ class HiDiscSystem(pl.LightningModule):
 
         bb_gather = self.all_gather(bb_out, sync_grads=True)
         bb_gather = bb_gather.reshape(-1, *bb_gather.shape[2:])
+        bb_gather_softmax = F.softmax(bb_gather, dim=-1)
+        bsz = bb_gather.shape
         
         pred_gather1 = self.all_gather(pred1, sync_grads=True)
         pred_gather1 = pred_gather1.reshape(-1, *pred_gather1.shape[2:])
@@ -163,42 +165,35 @@ class HiDiscSystem(pl.LightningModule):
 
         #contrastive losses
         losses = {key: patch_loss[key] + slide_loss[key] + patient_loss[key] for key in ['patch_loss','slide_loss','patient_loss']}
-        breakpoint()
 
         # KL loss
-        # bb_gather2 = bb_gather.clone()
+        bb_gather1 = bb_gather.clone().unsqueeze(-2)
         patch_emb_reshaped = self.patch_emb.view(1, 1, 1, 1, self.patch_emb.size(0), self.patch_emb.size(1))
-        cos_sim = F.cosine_similarity(bb_gather.clone().unsqueeze(-2), patch_emb_reshaped, dim=-1)
+        cos_sim = F.cosine_similarity(bb_gather1, patch_emb_reshaped, dim=-1)
         ind = torch.argmax(cos_sim, dim=-1).view(-1)
         patch_attr = self.patch_emb[ind]
-        patch_attr = patch_attr.view(bb_gather.shape)
-        breakpoint()
+        patch_attr = patch_attr.view(bsz)
 
         slide_emb_reshaped = self.slide_emb.view(1, 1, 1, 1, self.slide_emb.size(0), self.slide_emb.size(1))
-        cos_sim = F.cosine_similarity(bb_gather.clone().unsqueeze(-2), slide_emb_reshaped, dim=-1)
+        cos_sim = F.cosine_similarity(bb_gather1, slide_emb_reshaped, dim=-1)
         ind = torch.argmax(cos_sim, dim=-1).view(-1)
         slide_attr = self.slide_emb[ind]
-        slide_attr = slide_attr.view(bb_gather.shape)
+        slide_attr = slide_attr.view(bsz)
 
         patient_emb_reshaped = self.patient_emb.view(1, 1, 1, 1, self.patient_emb.size(0), self.patient_emb.size(1))
-        cos_sim = F.cosine_similarity(bb_gather.clone().unsqueeze(-2), patient_emb_reshaped, dim=-1)
+        cos_sim = F.cosine_similarity(bb_gather1, patient_emb_reshaped, dim=-1)
         ind = torch.argmax(cos_sim, dim=-1).view(-1)
         patient_attr = self.patient_emb[ind]
-        patient_attr = patient_attr.view(bb_gather.shape)
+        patient_attr = patient_attr.view(bsz)
 
-        bb_gather_softmax = F.softmax(bb_gather.clone(), dim=-1)
-        # breakpoint()
         patch_attr_softmax = F.softmax(patch_attr, dim=-1)
-        # patch_kl = F.kl_div(torch.log(patch_attr_softmax), bb_gather_softmax, reduction='none').sum(dim=-1).mean().item()
-        patch_kl = F.kl_div(torch.log(patch_attr_softmax), bb_gather_softmax, reduction='sum')
+        patch_kl = (F.kl_div(torch.log(patch_attr_softmax), bb_gather_softmax, reduction='sum').item() + F.kl_div(torch.log(bb_gather_softmax), patch_attr_softmax, reduction='sum').item())/2
         slide_attr_softmax = F.softmax(slide_attr, dim=-1)
-        # slide_kl = F.kl_div(torch.log(slide_attr_softmax), bb_gather_softmax, reduction='none').sum(dim=-1).mean().item()
-        slide_kl = F.kl_div(torch.log(slide_attr_softmax), bb_gather_softmax, reduction='sum')
+        slide_kl = (F.kl_div(torch.log(slide_attr_softmax), bb_gather_softmax, reduction='sum').item() + F.kl_div(torch.log(bb_gather_softmax), slide_attr_softmax, reduction='sum').item())/2
         patient_attr_softmax = F.softmax(patient_attr, dim=-1)
-        # patient_kl = F.kl_div(torch.log(patient_attr_softmax), bb_gather_softmax, reduction='none').sum(dim=-1).mean().item()
-        patient_kl = F.kl_div(torch.log(patient_attr_softmax), bb_gather_softmax, reduction='sum')
+        patient_kl = (F.kl_div(torch.log(patient_attr_softmax), bb_gather_softmax, reduction='sum').item() + F.kl_div(torch.log(bb_gather_softmax), patient_attr_softmax, reduction='sum').item())/2
 
-        #if not considerinf KL
+        #if not considering KL
         # patch_kl = 0
         # slide_kl = 0
         # patient_kl = 0
@@ -208,7 +203,6 @@ class HiDiscSystem(pl.LightningModule):
         losses['slide_kl'] = slide_kl
         losses['patient_kl'] = patient_kl
         losses['sum_loss'] = patch_loss['sum_loss'] + slide_loss['sum_loss'] + patient_loss['sum_loss'] + patch_kl + slide_kl + patient_kl
-        breakpoint()
 
         bs = batch["image"][0].shape[0] * torch.cuda.device_count()
         log_partial = partial(self.log,
@@ -234,36 +228,8 @@ class HiDiscSystem(pl.LightningModule):
 
         bb_gather = self.all_gather(bb_out, sync_grads=True)
         bb_gather = bb_gather.reshape(-1, *bb_gather.shape[2:])
-
-        #KL loss
-        patch_emb_reshaped = self.patch_emb.view(1, 1, 1, 1, self.patch_emb.size(0), self.patch_emb.size(1))
-        cos_sim = F.cosine_similarity(bb_gather.unsqueeze(-2), patch_emb_reshaped, dim=-1)
-        ind = torch.argmax(cos_sim, dim=-1).view(-1)
-        patch_attr = self.patch_emb[ind]
-        patch_attr = patch_attr.view(bb_gather.shape)
-
-        slide_emb_reshaped = self.slide_emb.view(1, 1, 1, 1, self.slide_emb.size(0), self.slide_emb.size(1))
-        cos_sim = F.cosine_similarity(bb_gather.unsqueeze(-2), slide_emb_reshaped, dim=-1)
-        ind = torch.argmax(cos_sim, dim=-1).view(-1)
-        slide_attr = self.slide_emb[ind]
-        slide_attr = slide_attr.view(bb_gather.shape)
-
-        patient_emb_reshaped = self.patient_emb.view(1, 1, 1, 1, self.patient_emb.size(0), self.patient_emb.size(1))
-        cos_sim = F.cosine_similarity(bb_gather.unsqueeze(-2), patient_emb_reshaped, dim=-1)
-        ind = torch.argmax(cos_sim, dim=-1).view(-1)
-        patient_attr = self.patient_emb[ind]
-        patient_attr = patient_attr.view(bb_gather.shape)
-
         bb_gather_softmax = F.softmax(bb_gather, dim=-1)
-        patch_attr_softmax = F.softmax(patch_attr, dim=-1)
-        # patch_kl = F.kl_div(torch.log(patch_attr_softmax), bb_gather_softmax, reduction='none').sum(dim=-1).mean().item()
-        patch_kl = F.kl_div(torch.log(patch_attr_softmax), bb_gather_softmax, reduction='sum')
-        slide_attr_softmax = F.softmax(slide_attr, dim=-1)
-        # slide_kl = F.kl_div(torch.log(slide_attr_softmax), bb_gather_softmax, reduction='none').sum(dim=-1).mean().item()
-        slide_kl = F.kl_div(torch.log(slide_attr_softmax), bb_gather_softmax, reduction='sum')
-        patient_attr_softmax = F.softmax(patient_attr, dim=-1)
-        # patient_kl = F.kl_div(torch.log(patient_attr_softmax), bb_gather_softmax, reduction='none').sum(dim=-1).mean().item()
-        patient_kl = F.kl_div(torch.log(patient_attr_softmax), bb_gather_softmax, reduction='sum')
+        bsz = bb_gather.shape
         
         pred_gather1 = self.all_gather(pred1, sync_grads=True)
         pred_gather1 = pred_gather1.reshape(-1, *pred_gather1.shape[2:])
@@ -279,13 +245,45 @@ class HiDiscSystem(pl.LightningModule):
         patient_loss = self.criterion3(pred_gather3, label_gather)
 
         #contrastive losses
-        losses = {key: patch_loss[key] + slide_loss[key] + patient_loss[key] for key in patch_loss}
+        losses = {key: patch_loss[key] + slide_loss[key] + patient_loss[key] for key in ['patch_loss','slide_loss','patient_loss']}
+
+        # KL loss
+        bb_gather1 = bb_gather.clone().unsqueeze(-2)
+        patch_emb_reshaped = self.patch_emb.view(1, 1, 1, 1, self.patch_emb.size(0), self.patch_emb.size(1))
+        cos_sim = F.cosine_similarity(bb_gather1, patch_emb_reshaped, dim=-1)
+        ind = torch.argmax(cos_sim, dim=-1).view(-1)
+        patch_attr = self.patch_emb[ind]
+        patch_attr = patch_attr.view(bsz)
+
+        slide_emb_reshaped = self.slide_emb.view(1, 1, 1, 1, self.slide_emb.size(0), self.slide_emb.size(1))
+        cos_sim = F.cosine_similarity(bb_gather1, slide_emb_reshaped, dim=-1)
+        ind = torch.argmax(cos_sim, dim=-1).view(-1)
+        slide_attr = self.slide_emb[ind]
+        slide_attr = slide_attr.view(bsz)
+
+        patient_emb_reshaped = self.patient_emb.view(1, 1, 1, 1, self.patient_emb.size(0), self.patient_emb.size(1))
+        cos_sim = F.cosine_similarity(bb_gather1, patient_emb_reshaped, dim=-1)
+        ind = torch.argmax(cos_sim, dim=-1).view(-1)
+        patient_attr = self.patient_emb[ind]
+        patient_attr = patient_attr.view(bsz)
+
+        patch_attr_softmax = F.softmax(patch_attr, dim=-1)
+        patch_kl = (F.kl_div(torch.log(patch_attr_softmax), bb_gather_softmax, reduction='sum').item() + F.kl_div(torch.log(bb_gather_softmax), patch_attr_softmax, reduction='sum').item())/2
+        slide_attr_softmax = F.softmax(slide_attr, dim=-1)
+        slide_kl = (F.kl_div(torch.log(slide_attr_softmax), bb_gather_softmax, reduction='sum').item() + F.kl_div(torch.log(bb_gather_softmax), slide_attr_softmax, reduction='sum').item())/2
+        patient_attr_softmax = F.softmax(patient_attr, dim=-1)
+        patient_kl = (F.kl_div(torch.log(patient_attr_softmax), bb_gather_softmax, reduction='sum').item() + F.kl_div(torch.log(bb_gather_softmax), patient_attr_softmax, reduction='sum').item())/2
+
+        #if not considering KL
+        # patch_kl = 0
+        # slide_kl = 0
+        # patient_kl = 0
 
         #KL losses
         losses['patch_kl'] = patch_kl
         losses['slide_kl'] = slide_kl
         losses['patient_kl'] = patient_kl
-        losses['sum_loss'] += (patch_kl+slide_kl+patient_kl)
+        losses['sum_loss'] = patch_loss['sum_loss'] + slide_loss['sum_loss'] + patient_loss['sum_loss'] + patch_kl + slide_kl + patient_kl
 
         bs = batch["image"][0].shape[0] * torch.cuda.device_count()
         for k in self.val_loss:
