@@ -4,7 +4,7 @@ A **Hierarchical Language-tied Self-Supervised (HLSS)** framework for histopatho
 
 [Hasindri Watawana](https://hasindri.github.io),
 [Kanchana Ranasinghe](https://scholar.google.com/citations?user=K2WBZTwAAAAJ&hl=en&authuser=1&oi=ao),
-[Tariq Mahmood](),
+[Tariq Mahmood](https://www.ikca.org.uk/about-ikca/shaukat-khanum-hospital/),
 [Muzammal Naseer](https://scholar.google.ch/citations?user=tM9xKA8AAAAJ&hl=en),
 [Salman Khan](https://salman-h-khan.github.io),
 and [Fahad Shahbaz Khan](https://scholar.google.es/citations?user=zvaeYnUAAAAJ&hl=en) 
