@@ -76,7 +76,7 @@ HLSS/
 ## Training / evaluation instructions
 
 The code base is written using PyTorch Lightning, with custom network and
-datasets for OpenSRH.
+datasets for OpenSRH and TCGA.
 
 To train HLSS on the OpenSRH dataset:
 
@@ -89,7 +89,7 @@ To train HLSS on the OpenSRH dataset:
     python train_hlss_KL.py -c=config/train_hlss_attr3levels.yaml
     ```
 
-To evaluate with your trained models and save metrics to a CSV file:
+To evaluate with your saved checkpoints and save metrics to a CSV file:
 1. Update the sample config file in `config/eval_hlss_attr128_accplot.yaml` with
     the checkpoint directory path and other desired configurations.
 2. Activate the conda virtual environment.
