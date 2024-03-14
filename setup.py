@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="hidisc",
+    name="hlss",
     version="0.0",
     packages=find_packages(),
     install_requires=[
@@ -21,5 +21,5 @@ setup(
         "torchvision>=0.11.0",
         "pytorch-lightning",
         "timm",
-        "tensorboard" # yapf:disable
+        "tensorboard" 
     ])
