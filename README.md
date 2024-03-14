@@ -9,28 +9,6 @@ A **Hierarchical Language-tied Self-Supervised (HLSS)** framework for histopatho
 [Salman Khan](https://salman-h-khan.github.io),
 and [Fahad Shahbaz Khan](https://scholar.google.es/citations?user=zvaeYnUAAAAJ&hl=en) 
 ![](https://i.imgur.com/waxVImv.png)
-<!-- [![paper](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2306.09320) -->
-
-<!-- ## Citation
-If you find our work, this repository, or pretrained models useful, please consider giving a star :star: and citation.
-```bibtex
-@article{kunhimon2023learnable,
-  title={Learnable Weight Initialization for Volumetric Medical Image Segmentation},
-  author={Kunhimon, Shahina and Shaker, Abdelrahman and Naseer, Muzammal and Khan, Salman and Khan, Fahad Shahbaz},
-  journal={arXiv preprint arXiv:2306.09320},
-  year={2023}
-}
-``` -->
-
-<!-- ## Contents
-1. [Overview](#Highlights)
-2. [Installation](#Installation)
-3. [Dataset](#Dataset)
-4. [Training](#Training)
-5. [Evaluation](#Evaluation)
-6. [Results](#Results)
-7. [Contact](#Contact)
-8. [References](#References) -->
 
 ## HLSS Overview
 
