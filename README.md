@@ -92,3 +92,17 @@ Should you have any questions, please create an issue in this repository or cont
 Our code is build on the repository of [HiDisc](https://github.com/MLNeurosurg/hidisc). We thank them for releasing their code.
 
 <hr>
+
+## Citation
+If you find our work or this repository useful, please consider giving a star :star: and citation.
+```bibtex
+@misc{watawana2024hierarchical,
+      title={Hierarchical Text-to-Vision Self Supervised Alignment for Improved Histopathology Representation Learning}, 
+      author={Hasindri Watawana and Kanchana Ranasinghe and Tariq Mahmood and Muzammal Naseer and Salman Khan and Fahad Shahbaz Khan},
+      year={2024},
+      eprint={2403.14616},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
+```
+
