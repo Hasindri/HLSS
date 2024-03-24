@@ -20,7 +20,7 @@ Self-supervised representation learning has been highly promising for histopatho
 
 1. Clone HLSS github repo
    ```console
-   git clone git@github.com:Hasindri/HLSS.git
+   git clone https://github.com/Hasindri/HLSS.git
    ```
 2. Create conda environment
     ```console
