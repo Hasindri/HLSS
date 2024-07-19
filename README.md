@@ -8,7 +8,6 @@ A **Hierarchical Language-tied Self-Supervised (HLSS)** framework for histopatho
 [Muzammal Naseer](https://scholar.google.ch/citations?user=tM9xKA8AAAAJ&hl=en),
 [Salman Khan](https://salman-h-khan.github.io)
 and [Fahad Khan](https://scholar.google.es/citations?user=zvaeYnUAAAAJ&hl=en) 
-![](https://i.imgur.com/waxVImv.png)
 
 #### **Mohamed Bin Zayed University of Artificial Intelligence, Stony Brook University, Linko ̈ping University, Australian National University and Shaukat Khanum Cancer Hospital, Pakistan**
 
@@ -19,6 +18,8 @@ and [Fahad Khan](https://scholar.google.es/citations?user=zvaeYnUAAAAJ&hl=en)
 - **Jun-17-24**: We open source the code, model, training and evaluation scripts.
 - **Jun-17-24**: HLSS has been accepted to **MICCAI 2024** 🎉. 
 - **Mar-21-24**: HLSS paper is released [arxiv link](https://arxiv.org/abs/2403.14616). 🔥🔥
+
+![](https://i.imgur.com/waxVImv.png)
 
 ## HLSS Overview
 
