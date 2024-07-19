@@ -1,4 +1,4 @@
-# Hierarchical Text-to-Vision Self Supervised Alignment for Improved Histopathology Representation Learning 
+# Hierarchical Text-to-Vision Self Supervised Alignment for Improved Histopathology Representation Learning [MICCAI 2024]
 
 A **Hierarchical Language-tied Self-Supervised (HLSS)** framework for histopathology 
 
@@ -6,9 +6,19 @@ A **Hierarchical Language-tied Self-Supervised (HLSS)** framework for histopatho
 [Kanchana Ranasinghe](https://scholar.google.com/citations?user=K2WBZTwAAAAJ&hl=en&authuser=1&oi=ao),
 [Tariq Mahmood](https://www.ikca.org.uk/about-ikca/shaukat-khanum-hospital/),
 [Muzammal Naseer](https://scholar.google.ch/citations?user=tM9xKA8AAAAJ&hl=en),
-[Salman Khan](https://salman-h-khan.github.io),
-and [Fahad Shahbaz Khan](https://scholar.google.es/citations?user=zvaeYnUAAAAJ&hl=en) 
+[Salman Khan](https://salman-h-khan.github.io)
+and [Fahad Khan](https://scholar.google.es/citations?user=zvaeYnUAAAAJ&hl=en) 
 ![](https://i.imgur.com/waxVImv.png)
+
+#### **Mohamed Bin Zayed University of Artificial Intelligence, Stony Brook University, Linko ̈ping University, Australian National University and Shaukat Khanum Cancer Hospital, Pakistan**
+
+[![paper](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2403.14616)
+
+## 📢 Latest Updates
+
+- **Jun-17-24**: We open source the code, model, training and evaluation scripts.
+- **Jun-17-24**: HLSS has been accepted to **MICCAI 2024** 🎉. 
+- **Mar-21-24**: HLSS paper is released [arxiv link](https://arxiv.org/abs/2403.14616). 🔥🔥
 
 ## HLSS Overview
 
