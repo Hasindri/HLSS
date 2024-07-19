@@ -12,14 +12,12 @@ and [Fahad Khan](https://scholar.google.es/citations?user=zvaeYnUAAAAJ&hl=en)
 #### **Mohamed Bin Zayed University of Artificial Intelligence, Stony Brook University, Linko ̈ping University, Australian National University and Shaukat Khanum Cancer Hospital, Pakistan**
 
 [![paper](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2403.14616)
-
+![](https://i.imgur.com/waxVImv.png)
 ## 📢 Latest Updates
 
 - **Jun-17-24**: We open source the code, model, training and evaluation scripts.
 - **Jun-17-24**: HLSS has been accepted to **MICCAI 2024** 🎉. 
 - **Mar-21-24**: HLSS paper is released [arxiv link](https://arxiv.org/abs/2403.14616). 🔥🔥
-
-![](https://i.imgur.com/waxVImv.png)
 
 ## HLSS Overview
 
